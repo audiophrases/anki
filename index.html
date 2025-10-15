@@ -1292,10 +1292,45 @@
       return Array.from(candidates).filter(Boolean);
     }
 
+    const DICTIONARY_PROXY_HOSTS = new Set([
+      "www.merriam-webster.com",
+      "www.ldoceonline.com",
+      "www.oxfordlearnersdictionaries.com",
+    ]);
+
+    function rewriteDictionaryRequestUrl(url) {
+      if (!url) {
+        return url;
+      }
+
+      try {
+        const base =
+          typeof window !== "undefined" && window.location
+            ? window.location.origin
+            : "http://localhost";
+        const targetUrl = new URL(url, base);
+
+        if (targetUrl.pathname === "/proxy") {
+          return url;
+        }
+
+        const host = targetUrl.host.toLowerCase();
+        if (!DICTIONARY_PROXY_HOSTS.has(host)) {
+          return url;
+        }
+
+        const encoded = encodeURIComponent(targetUrl.toString());
+        return `/proxy?url=${encoded}`;
+      } catch (error) {
+        return url;
+      }
+    }
+
     async function fetchHtmlDocument(url, { label } = {}) {
+      const requestUrl = rewriteDictionaryRequestUrl(url);
       let response;
       try {
-        response = await fetch(url, {
+        response = await fetch(requestUrl, {
           headers: {
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           },
@@ -1461,7 +1496,9 @@
           }
           tried.add(slugCandidate);
 
-          const url = `https://www.ldoceonline.com/dictionary/${encodeURIComponent(slugCandidate)}`;
+          const url = rewriteDictionaryRequestUrl(
+            `https://www.ldoceonline.com/dictionary/${encodeURIComponent(slugCandidate)}`
+          );
           const documentNode = await fetchHtmlDocument(url, { label: "Longman lookup failed" });
 
           if (!documentNode) {
@@ -1571,7 +1608,9 @@
           }
           tried.add(slugCandidate);
 
-          const url = `https://www.merriam-webster.com/dictionary/${encodeURIComponent(slugCandidate)}`;
+          const url = rewriteDictionaryRequestUrl(
+            `https://www.merriam-webster.com/dictionary/${encodeURIComponent(slugCandidate)}`
+          );
           const documentNode = await fetchHtmlDocument(url, {
             label: "Merriam-Webster lookup failed",
           });
@@ -1689,9 +1728,11 @@
           }
           tried.add(slugCandidate);
 
-          const url = `https://www.oxfordlearnersdictionaries.com/definition/english/${encodeURIComponent(
-            slugCandidate
-          )}`;
+          const url = rewriteDictionaryRequestUrl(
+            `https://www.oxfordlearnersdictionaries.com/definition/english/${encodeURIComponent(
+              slugCandidate
+            )}`
+          );
           const documentNode = await fetchHtmlDocument(url, { label: "Oxford lookup failed" });
 
           if (!documentNode) {
