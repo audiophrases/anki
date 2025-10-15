@@ -188,26 +188,125 @@
       white-space: nowrap;
     }
 
+    .dictionary-settings {
+      margin-top: 1rem;
+      display: grid;
+      gap: 1rem;
+    }
+
+    .scope-toggle {
+      display: inline-flex;
+      background: rgba(63, 100, 199, 0.1);
+      border-radius: 999px;
+      padding: 0.2rem;
+      gap: 0.2rem;
+      flex-wrap: wrap;
+    }
+
+    .scope-toggle button {
+      background: transparent;
+      border-radius: 999px;
+      padding: 0.45rem 0.95rem;
+      border: none;
+      color: #2a3d82;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .scope-toggle button.is-active {
+      background: #3f64c7;
+      color: white;
+    }
+
+    .dictionary-provider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .provider-option {
+      background: rgba(63, 100, 199, 0.08);
+      border: 1px solid rgba(63, 100, 199, 0.14);
+      border-radius: 12px;
+      padding: 0.55rem 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 500;
+      color: #2a3d82;
+    }
+
+    .provider-option input[type="checkbox"] {
+      width: 1rem;
+      height: 1rem;
+      margin: 0;
+    }
+
     .dictionary-results {
       display: grid;
       gap: 1rem;
       margin-top: 1rem;
     }
 
-    .definition-card {
-      border: 1px solid rgba(63, 100, 199, 0.18);
-      border-radius: 14px;
-      padding: 1rem;
-      background: rgba(242, 245, 255, 0.6);
-      display: grid;
-      gap: 0.8rem;
+    .suggestions {
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+      color: #2f4075;
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      align-items: center;
     }
 
-    .definition-card header {
+    .suggestions button {
+      background: rgba(63, 100, 199, 0.15);
+      color: #2a3d82;
+      border-radius: 999px;
+      border: none;
+      padding: 0.3rem 0.75rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .definition-entry {
+      border: 1px solid rgba(63, 100, 199, 0.18);
+      border-radius: 16px;
+      background: rgba(242, 245, 255, 0.6);
+      padding: 0.3rem 0.6rem;
+    }
+
+    .definition-entry > summary {
+      list-style: none;
       display: flex;
-      align-items: center;
       justify-content: space-between;
       gap: 0.75rem;
+      align-items: center;
+      cursor: pointer;
+      padding: 0.55rem 0.35rem;
+    }
+
+    .definition-entry > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .entry-summary-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .entry-headword {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1e2a44;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      align-items: center;
     }
 
     .badge {
@@ -215,8 +314,8 @@
       color: #2a3d82;
       border-radius: 999px;
       padding: 0.3rem 0.75rem;
-      font-size: 0.8rem;
-      font-weight: 600;
+      font-size: 0.75rem;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.02em;
     }
@@ -226,13 +325,71 @@
       color: #3f64c7;
     }
 
+    .entry-content {
+      padding: 0 0.9rem 0.9rem 0.9rem;
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .entry-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .meaning-block {
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 12px;
+      border: 1px solid rgba(63, 100, 199, 0.12);
+      padding: 0.75rem 0.85rem;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .meaning-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+
+    .definition-list {
+      list-style: decimal inside;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .definition-item {
+      display: grid;
+      gap: 0.45rem;
+    }
+
     .definition-text {
       font-size: 1rem;
+      color: #1e2a44;
     }
 
     .example-text {
       font-style: italic;
       color: #42507b;
+    }
+
+    .synonym-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .synonym-cloud button {
+      background: rgba(63, 100, 199, 0.15);
+      border: none;
+      border-radius: 999px;
+      padding: 0.35rem 0.8rem;
+      font-weight: 600;
+      color: #2a3d82;
+      cursor: pointer;
     }
 
     .status {
@@ -301,6 +458,23 @@
         <label for="tags" style="margin-top: 1rem;">Tags (comma separated)</label>
         <input type="text" id="tags" placeholder="vocab, dictionary" />
       </section>
+
+      <section>
+        <p style="margin-top: 0; font-weight: 600;">Dictionary API keys (optional)</p>
+        <label for="longman-app-id">Longman App ID</label>
+        <input type="text" id="longman-app-id" placeholder="Your Longman ID" autocomplete="off" />
+        <label for="longman-app-key" style="margin-top: 0.75rem;">Longman App Key</label>
+        <input type="password" id="longman-app-key" placeholder="Longman key" autocomplete="off" />
+        <label for="merriam-key" style="margin-top: 0.75rem;">Merriam-Webster Key</label>
+        <input type="password" id="merriam-key" placeholder="Merriam-Webster key" autocomplete="off" />
+        <label for="oxford-app-id" style="margin-top: 0.75rem;">Oxford App ID</label>
+        <input type="text" id="oxford-app-id" placeholder="Oxford ID" autocomplete="off" />
+        <label for="oxford-app-key" style="margin-top: 0.75rem;">Oxford App Key</label>
+        <input type="password" id="oxford-app-key" placeholder="Oxford key" autocomplete="off" />
+        <p style="font-size: 0.8rem; line-height: 1.4; color: rgba(255, 255, 255, 0.85);">
+          Keys are stored locally in your browser and used only for dictionary requests.
+        </p>
+      </section>
     </aside>
 
     <main class="main">
@@ -351,6 +525,21 @@
           <div class="dictionary-scope" aria-live="polite">All dictionaries</div>
           <button id="search-dictionary">Search</button>
         </div>
+        <div class="dictionary-settings">
+          <div>
+            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Search scope</p>
+            <div class="scope-toggle" role="group" aria-label="Search scope">
+              <button type="button" class="is-active" data-scope="online-decks">Online + decks</button>
+              <button type="button" data-scope="online-only">Online only</button>
+              <button type="button" data-scope="decks-only">Decks only</button>
+            </div>
+          </div>
+          <div>
+            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Dictionaries</p>
+            <div class="dictionary-provider-grid" id="dictionary-provider-grid"></div>
+          </div>
+        </div>
+        <div class="suggestions" id="spelling-suggestions" hidden></div>
         <div class="dictionary-results" id="dictionary-results"></div>
       </section>
 
@@ -398,7 +587,10 @@
     const loadDecksBtn = document.getElementById("load-decks");
     const lookupTermInput = document.getElementById("lookup-term");
     const searchButton = document.getElementById("search-dictionary");
+    const dictionaryScopeDisplay = document.querySelector(".dictionary-scope");
+    const dictionaryProviderGrid = document.getElementById("dictionary-provider-grid");
     const dictionaryResults = document.getElementById("dictionary-results");
+    const spellingSuggestions = document.getElementById("spelling-suggestions");
     const frontField = document.getElementById("front-field");
     const backField = document.getElementById("back-field");
     const exampleField = document.getElementById("example-field");
@@ -410,6 +602,12 @@
     const modelSuggestions = document.getElementById("model-suggestions");
     const tagsInput = document.getElementById("tags");
     const setupNotice = document.getElementById("setup-notice");
+    const scopeToggleButtons = document.querySelectorAll(".scope-toggle button");
+    const longmanAppIdInput = document.getElementById("longman-app-id");
+    const longmanAppKeyInput = document.getElementById("longman-app-key");
+    const merriamKeyInput = document.getElementById("merriam-key");
+    const oxfordAppIdInput = document.getElementById("oxford-app-id");
+    const oxfordAppKeyInput = document.getElementById("oxford-app-key");
 
     const previewDeck = document.getElementById("preview-deck");
     const previewModel = document.getElementById("preview-model");
@@ -424,15 +622,56 @@
       setupNoticeDismissed: "anki.session.setupDismissed",
     };
 
+    const LOCAL_STORAGE_KEYS = {
+      dictionaryApi: "anki.dictionary.apiKeys",
+      providerSelection: "anki.dictionary.providers",
+      searchScope: "anki.dictionary.scope",
+    };
+
     const DEFAULT_MODEL_NAME = "Basic";
     const NOTE_SAMPLE_BATCH_SIZE = 200;
     const NOTE_SAMPLE_BATCH_LIMIT = 5;
     const NOTE_SEARCH_LIMIT = 25;
+    const SEARCH_SCOPES = {
+      onlineDecks: "online-decks",
+      onlineOnly: "online-only",
+      decksOnly: "decks-only",
+    };
+    const PART_OF_SPEECH_ALIASES = {
+      noun: ["noun", "n", "n.", "countable noun", "uncountable noun", "plural noun"],
+      verb: ["verb", "v", "v.", "transitive verb", "intransitive verb", "phrasal verb"],
+      adjective: ["adjective", "adj", "adj.", "adjectival"],
+      adverb: ["adverb", "adv", "adv."],
+      pronoun: ["pronoun", "prn", "prn."],
+      preposition: ["preposition", "prep", "prep."],
+      conjunction: ["conjunction", "conj", "conj."],
+      interjection: ["interjection", "int", "int."],
+      determiner: ["determiner", "det", "det.", "article"],
+      idiom: ["idiom", "phrase", "set phrase", "expression", "idiomatic"],
+    };
 
     const htmlParser = document.createElement("div");
 
     let userModifiedNoteType = false;
     let pendingNoteTypeDeck = "";
+    let dictionaryApiConfig =
+      safeParseJSON(getLocalStorageItem(LOCAL_STORAGE_KEYS.dictionaryApi), {}) || {};
+    const providerSelectionRaw = safeParseJSON(
+      getLocalStorageItem(LOCAL_STORAGE_KEYS.providerSelection),
+      []
+    );
+    let activeSearchScope =
+      getLocalStorageItem(LOCAL_STORAGE_KEYS.searchScope) || "online-decks";
+
+    const activeProviderSelection = new Set(
+      Array.isArray(providerSelectionRaw) ? providerSelectionRaw : []
+    );
+
+    if (!Object.values(SEARCH_SCOPES).includes(activeSearchScope)) {
+      activeSearchScope = SEARCH_SCOPES.onlineDecks;
+    }
+
+    let lastPartOfSpeechFilter = "";
 
     function safeParseJSON(value, fallback = null) {
       if (!value) {
@@ -465,6 +704,373 @@
       } catch (error) {
         console.warn("Failed to persist session value", error);
       }
+    }
+
+    function getLocalStorageItem(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (error) {
+        console.warn("Local storage unavailable", error);
+        return null;
+      }
+    }
+
+    function setLocalStorageItem(key, value) {
+      try {
+        if (value === null || value === undefined) {
+          localStorage.removeItem(key);
+        } else {
+          localStorage.setItem(key, value);
+        }
+      } catch (error) {
+        console.warn("Failed to persist local value", error);
+      }
+    }
+
+    function canonicalizePartOfSpeech(label) {
+      if (!label) {
+        return "";
+      }
+
+      const cleaned = label
+        .toString()
+        .toLowerCase()
+        .replace(/<[^>]*>/g, "")
+        .replace(/[^a-z\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!cleaned) {
+        return "";
+      }
+
+      for (const [canonical, aliases] of Object.entries(PART_OF_SPEECH_ALIASES)) {
+        if (aliases.some((alias) => cleaned === alias || cleaned.includes(alias))) {
+          return canonical;
+        }
+      }
+
+      return cleaned;
+    }
+
+    function generateSearchVariants(term) {
+      const variants = new Set();
+      const trimmed = (term || "").trim();
+      if (!trimmed) {
+        return [];
+      }
+
+      variants.add(trimmed);
+      variants.add(trimmed.replace(/\s+/g, "-"));
+      variants.add(trimmed.replace(/\s+/g, ""));
+      variants.add(trimmed.replace(/-/g, " "));
+      variants.add(trimmed.replace(/-/g, ""));
+      variants.add(trimmed.replace(/[’']/g, ""));
+
+      return Array.from(variants).filter(Boolean);
+    }
+
+    function parseLookupTerm(rawTerm) {
+      const original = rawTerm;
+      let working = rawTerm.trim();
+      let posHint = "";
+
+      const asMatch = working.match(/^(.*?)[\s,:-]*as\s+an?\s+([a-z-]+)/i);
+      if (asMatch) {
+        working = asMatch[1].trim();
+        posHint = posHint || asMatch[2].trim();
+      }
+
+      const parenMatch = working.match(/^(.*?)[\s]*\(([^)]+)\)\s*$/);
+      if (parenMatch) {
+        working = parenMatch[1].trim();
+        posHint = posHint || parenMatch[2].trim();
+      }
+
+      const commaMatch = working.match(/^(.*?)[\s,;-]+(noun|verb|adjective|adverb|pronoun|preposition|conjunction|interjection|idiom|phrase)$/i);
+      if (commaMatch) {
+        working = commaMatch[1].trim();
+        posHint = posHint || commaMatch[2].trim();
+      }
+
+      const partOfSpeech = canonicalizePartOfSpeech(posHint);
+      const normalizedTerm = working.replace(/\s+/g, " ").trim();
+      const variants = generateSearchVariants(normalizedTerm);
+      const tokens = normalizedTerm.split(/\s+/).filter(Boolean);
+
+      return {
+        originalTerm: original,
+        term: normalizedTerm,
+        partOfSpeech,
+        variants,
+        tokens,
+      };
+    }
+
+    function filterEntryByPartOfSpeech(entry, partOfSpeech) {
+      if (!partOfSpeech || !entry || !Array.isArray(entry.meanings)) {
+        return entry;
+      }
+
+      const filteredMeanings = entry.meanings
+        .map((meaning) => {
+          if (!meaning || !Array.isArray(meaning.definitions) || !meaning.definitions.length) {
+            return null;
+          }
+
+          const meaningPos = canonicalizePartOfSpeech(meaning.partOfSpeech || "");
+
+          if (meaningPos) {
+            if (meaningPos !== partOfSpeech && !meaningPos.includes(partOfSpeech)) {
+              return null;
+            }
+          } else {
+            const rawPos = (meaning.partOfSpeech || "").toString().toLowerCase();
+            if (rawPos && !rawPos.includes(partOfSpeech)) {
+              return null;
+            }
+          }
+
+          return {
+            ...meaning,
+            partOfSpeech: meaning.partOfSpeech,
+            definitions: meaning.definitions,
+          };
+        })
+        .filter(Boolean);
+
+      if (!filteredMeanings.length) {
+        return null;
+      }
+
+      return {
+        ...entry,
+        meanings: filteredMeanings,
+      };
+    }
+
+    function serializeApiConfig() {
+      const keys = Object.keys(dictionaryApiConfig || {});
+      if (!keys.length) {
+        setLocalStorageItem(LOCAL_STORAGE_KEYS.dictionaryApi, null);
+        return;
+      }
+      setLocalStorageItem(
+        LOCAL_STORAGE_KEYS.dictionaryApi,
+        JSON.stringify(dictionaryApiConfig)
+      );
+    }
+
+    function updateApiConfigValue(providerId, keyName, value) {
+      if (!providerId || !keyName) {
+        return;
+      }
+
+      if (!dictionaryApiConfig || typeof dictionaryApiConfig !== "object") {
+        dictionaryApiConfig = {};
+      }
+
+      if (!dictionaryApiConfig[providerId]) {
+        dictionaryApiConfig[providerId] = {};
+      }
+
+      if (!value) {
+        delete dictionaryApiConfig[providerId][keyName];
+      } else {
+        dictionaryApiConfig[providerId][keyName] = value;
+      }
+
+      if (dictionaryApiConfig[providerId] && !Object.keys(dictionaryApiConfig[providerId]).length) {
+        delete dictionaryApiConfig[providerId];
+      }
+
+      serializeApiConfig();
+    }
+
+    function registerApiInput(input, providerId, keyName) {
+      if (!input) {
+        return;
+      }
+
+      const storedValue = dictionaryApiConfig?.[providerId]?.[keyName];
+      if (storedValue) {
+        input.value = storedValue;
+      }
+
+      const persist = () => {
+        updateApiConfigValue(providerId, keyName, input.value.trim());
+      };
+
+      input.addEventListener("change", persist);
+      input.addEventListener("blur", persist);
+      input.addEventListener("input", () => {
+        // Avoid excessive writes while typing by batching through requestAnimationFrame
+        if (input._persistTimer) {
+          cancelAnimationFrame(input._persistTimer);
+        }
+        input._persistTimer = requestAnimationFrame(persist);
+      });
+    }
+
+    function getProviderCredentials(providerId) {
+      if (!providerId) {
+        return {};
+      }
+      const credentials = dictionaryApiConfig?.[providerId];
+      if (!credentials || typeof credentials !== "object") {
+        return {};
+      }
+      return credentials;
+    }
+
+    function persistProviderSelection() {
+      const ids = Array.from(activeProviderSelection);
+      if (!ids.length) {
+        setLocalStorageItem(LOCAL_STORAGE_KEYS.providerSelection, null);
+        return;
+      }
+      setLocalStorageItem(LOCAL_STORAGE_KEYS.providerSelection, JSON.stringify(ids));
+    }
+
+    function getActiveDictionaryProviderIds() {
+      if (activeProviderSelection.size) {
+        return Array.from(activeProviderSelection).filter(
+          (id) => !!dictionaryProviders[id]
+        );
+      }
+
+      return Object.values(dictionaryProviders)
+        .filter((provider) => provider?.defaultEnabled !== false)
+        .map((provider) => provider.id);
+    }
+
+    function updateDictionaryScopeLabel(partOfSpeechLabel = lastPartOfSpeechFilter) {
+      if (!dictionaryScopeDisplay) {
+        return;
+      }
+
+      const providerIds = activeSearchScope === SEARCH_SCOPES.decksOnly
+        ? []
+        : getActiveDictionaryProviderIds();
+
+      const providerLabels = providerIds
+        .map((id) => dictionaryProviders[id]?.label || id)
+        .filter(Boolean);
+
+      let providerSummary = "No online dictionaries";
+      if (providerLabels.length === 1) {
+        providerSummary = providerLabels[0];
+      } else if (providerLabels.length > 1) {
+        if (providerLabels.length <= 3) {
+          providerSummary = providerLabels.join(", ");
+        } else {
+          providerSummary = `${providerLabels.slice(0, 2).join(", ")}, +${
+            providerLabels.length - 2
+          } more`;
+        }
+      }
+
+      const scopeLabelMap = {
+        [SEARCH_SCOPES.onlineDecks]: "Online + decks",
+        [SEARCH_SCOPES.onlineOnly]: "Online only",
+        [SEARCH_SCOPES.decksOnly]: "Decks only",
+      };
+
+      const scopeText = scopeLabelMap[activeSearchScope] || "Custom scope";
+
+      const parts = [scopeText];
+      if (activeSearchScope !== SEARCH_SCOPES.decksOnly) {
+        parts.push(providerSummary);
+      }
+      if (partOfSpeechLabel) {
+        parts.push(`POS: ${partOfSpeechLabel}`);
+      }
+
+      dictionaryScopeDisplay.textContent = parts.join(" • ");
+    }
+
+    function setSearchScope(scope) {
+      if (!scope || activeSearchScope === scope) {
+        updateDictionaryScopeLabel();
+        return;
+      }
+
+      activeSearchScope = scope;
+      setLocalStorageItem(LOCAL_STORAGE_KEYS.searchScope, scope);
+
+      scopeToggleButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.scope === scope);
+      });
+
+      updateDictionaryScopeLabel();
+    }
+
+    function initializeScopeButtons() {
+      scopeToggleButtons.forEach((button) => {
+        const scope = button.dataset.scope;
+        button.classList.toggle("is-active", scope === activeSearchScope);
+        button.addEventListener("click", () => {
+          setSearchScope(scope);
+        });
+      });
+    }
+
+    function initializeDictionaryProviderOptions() {
+      if (!dictionaryProviderGrid) {
+        return;
+      }
+
+      dictionaryProviderGrid.innerHTML = "";
+
+      const defaultsAdded = new Set();
+
+      Object.values(dictionaryProviders).forEach((provider) => {
+        if (!provider || provider.hidden) {
+          return;
+        }
+
+        const option = document.createElement("label");
+        option.className = "provider-option";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = provider.id;
+
+        let isSelected = activeProviderSelection.has(provider.id);
+        if (!activeProviderSelection.size && provider.defaultEnabled !== false) {
+          isSelected = true;
+          defaultsAdded.add(provider.id);
+        }
+
+        checkbox.checked = isSelected;
+        if (isSelected) {
+          activeProviderSelection.add(provider.id);
+        }
+
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) {
+            activeProviderSelection.add(provider.id);
+          } else {
+            activeProviderSelection.delete(provider.id);
+          }
+          persistProviderSelection();
+          updateDictionaryScopeLabel();
+        });
+
+        option.appendChild(checkbox);
+
+        const labelText = document.createElement("span");
+        labelText.textContent = provider.label || provider.id;
+        option.appendChild(labelText);
+
+        dictionaryProviderGrid.appendChild(option);
+      });
+
+      if (defaultsAdded.size) {
+        persistProviderSelection();
+      }
+
+      updateDictionaryScopeLabel();
     }
 
     function persistCredentials() {
@@ -624,10 +1230,11 @@
       if (!example) {
         return "";
       }
-      return example
+      const cleaned = stripHtml(example)
         .replace(/\s+/g, " ")
         .replace(/[\[\]]/g, "")
         .trim();
+      return cleaned;
     }
 
     function normalizeDefinitions(definitions = []) {
@@ -636,7 +1243,9 @@
           if (!item) {
             return null;
           }
-          const definition = (item.definition || item.meaning || "").toString().trim();
+          const definition = stripHtml(
+            (item.definition || item.meaning || item.text || "").toString()
+          ).trim();
           if (!definition) {
             return null;
           }
@@ -693,21 +1302,32 @@
         .filter(Boolean);
     }
 
-    async function fetchFreeDictionaryEntries(term) {
-      const response = await fetch(
-        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`
-      );
+    async function fetchFreeDictionaryEntries(term, parsedTerm) {
+      const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
+        ? parsedTerm.variants
+        : [term];
 
-      if (response.status === 404) {
-        return [];
+      for (const variant of variants) {
+        const response = await fetch(
+          `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(variant)}`
+        );
+
+        if (response.status === 404) {
+          continue;
+        }
+
+        if (!response.ok) {
+          throw new Error("Dictionary lookup failed");
+        }
+
+        const data = await response.json();
+        const entries = normalizeFreeDictionaryEntries(data, variant);
+        if (entries.length) {
+          return entries;
+        }
       }
 
-      if (!response.ok) {
-        throw new Error("Dictionary lookup failed");
-      }
-
-      const data = await response.json();
-      return normalizeFreeDictionaryEntries(data, term);
+      return [];
     }
 
     function normalizeWiktionaryEntries(data, term) {
@@ -738,26 +1358,37 @@
         .filter(Boolean);
     }
 
-    async function fetchWiktionaryEntries(term) {
-      const response = await fetch(
-        `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(term)}`,
-        {
-          headers: {
-            "Api-User-Agent": "anki-card-creator/1.0 (https://ankiweb.net)",
-          },
+    async function fetchWiktionaryEntries(term, parsedTerm) {
+      const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
+        ? parsedTerm.variants
+        : [term];
+
+      for (const variant of variants) {
+        const response = await fetch(
+          `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(variant)}`,
+          {
+            headers: {
+              "Api-User-Agent": "anki-card-creator/1.0 (https://ankiweb.net)",
+            },
+          }
+        );
+
+        if (response.status === 404) {
+          continue;
         }
-      );
 
-      if (response.status === 404) {
-        return [];
+        if (!response.ok) {
+          throw new Error("Wiktionary lookup failed");
+        }
+
+        const data = await response.json();
+        const entries = normalizeWiktionaryEntries(data, variant);
+        if (entries.length) {
+          return entries;
+        }
       }
 
-      if (!response.ok) {
-        throw new Error("Wiktionary lookup failed");
-      }
-
-      const data = await response.json();
-      return normalizeWiktionaryEntries(data, term);
+      return [];
     }
 
     function normalizeUrbanEntries(data, term) {
@@ -790,9 +1421,10 @@
         .filter(Boolean);
     }
 
-    async function fetchUrbanEntries(term) {
+    async function fetchUrbanEntries(term, parsedTerm) {
+      const queryTerm = parsedTerm?.term || term;
       const response = await fetch(
-        `https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(term)}`
+        `https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(queryTerm)}`
       );
 
       if (!response.ok) {
@@ -800,7 +1432,395 @@
       }
 
       const data = await response.json();
-      return normalizeUrbanEntries(data, term);
+      return normalizeUrbanEntries(data, queryTerm);
+    }
+
+    function normalizeLongmanEntries(data, term) {
+      const items = Array.isArray(data?.results)
+        ? data.results
+        : Array.isArray(data?.entries)
+        ? data.entries
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      return items
+        .map((item) => {
+          const headword = item?.headword || item?.word || term;
+          const pronunciations = Array.isArray(item?.pronunciations)
+            ? item.pronunciations
+                .map((pron) => pron?.ipa || pron?.phonetic || pron?.pronunciation)
+                .filter(Boolean)
+            : [];
+          const phonetic = pronunciations[0] || item?.pronunciation || "";
+
+          const senses = Array.isArray(item?.senses)
+            ? item.senses
+            : Array.isArray(item?.sense)
+            ? item.sense
+            : [];
+
+          const meanings = senses
+            .map((sense, index) => {
+              const definitionSources = Array.isArray(sense?.definition)
+                ? sense.definition
+                : Array.isArray(sense?.definitions)
+                ? sense.definitions
+                : sense?.definition
+                ? [sense.definition]
+                : [];
+
+              const exampleText = Array.isArray(sense?.examples)
+                ? sense.examples
+                    .map((example) =>
+                      typeof example === "string"
+                        ? example
+                        : example?.text || example?.example || ""
+                    )
+                    .find((value) => value && value.trim()) || ""
+                : "";
+
+              const definitions = normalizeDefinitions(
+                definitionSources.map((definition) => ({
+                  definition,
+                  example: exampleText,
+                }))
+              );
+
+              if (!definitions.length) {
+                return null;
+              }
+
+              return {
+                partOfSpeech:
+                  sense?.part_of_speech ||
+                  sense?.partOfSpeech ||
+                  item?.part_of_speech ||
+                  item?.partOfSpeech ||
+                  `Sense ${index + 1}`,
+                definitions,
+              };
+            })
+            .filter(Boolean);
+
+          if (!meanings.length) {
+            return null;
+          }
+
+          return {
+            word: headword || term,
+            phonetic: phonetic || "",
+            source: "Longman",
+            meanings,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    async function fetchLongmanEntries(term, parsedTerm, options = {}) {
+      const credentials = options.credentials || {};
+      const appId = credentials.appId || credentials.app_id;
+      const appKey = credentials.appKey || credentials.app_key;
+
+      if (!appId || !appKey) {
+        throw new Error("Longman API credentials are missing.");
+      }
+
+      const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
+        ? parsedTerm.variants
+        : [term];
+
+      for (const variant of variants) {
+        const response = await fetch(
+          `https://api.ldoceonline.com/v2/dictionaries/entries?headword=${encodeURIComponent(variant)}`,
+          {
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+              app_id: appId,
+              app_key: appKey,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            continue;
+          }
+          throw new Error("Longman lookup failed");
+        }
+
+        const data = await response.json();
+        const entries = normalizeLongmanEntries(data, variant);
+        if (entries.length) {
+          return entries;
+        }
+      }
+
+      return [];
+    }
+
+    function normalizeMerriamEntries(data, term) {
+      if (!Array.isArray(data)) {
+        return [];
+      }
+
+      return data
+        .map((entry) => {
+          if (!entry || !Array.isArray(entry.shortdef) || !entry.shortdef.length) {
+            return null;
+          }
+
+          const definitions = normalizeDefinitions(
+            entry.shortdef.map((definition) => ({ definition }))
+          );
+
+          if (!definitions.length) {
+            return null;
+          }
+
+          const headword = entry.hwi?.hw ? entry.hwi.hw.replace(/\*/g, "") : term;
+          const phonetic = Array.isArray(entry.hwi?.prs)
+            ? entry.hwi.prs
+                .map((pron) => pron?.ipa || pron?.mw)
+                .find((value) => value && value.trim()) || ""
+            : "";
+
+          return {
+            word: headword || term,
+            phonetic,
+            source: "Merriam-Webster",
+            meanings: [
+              {
+                partOfSpeech: entry.fl || "Definition",
+                definitions,
+              },
+            ],
+          };
+        })
+        .filter(Boolean);
+    }
+
+    async function fetchMerriamEntries(term, parsedTerm, options = {}) {
+      const apiKey = options.credentials?.key;
+      if (!apiKey) {
+        throw new Error("Merriam-Webster API key is missing.");
+      }
+
+      const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
+        ? parsedTerm.variants
+        : [term];
+
+      for (const variant of variants) {
+        const response = await fetch(
+          `https://www.dictionaryapi.com/api/v3/references/learners/json/${encodeURIComponent(variant)}?key=${apiKey}`
+        );
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            continue;
+          }
+          throw new Error("Merriam-Webster lookup failed");
+        }
+
+        const data = await response.json();
+        const entries = normalizeMerriamEntries(data, variant);
+        if (entries.length) {
+          return entries;
+        }
+      }
+
+      return [];
+    }
+
+    function normalizeOxfordEntries(data, term) {
+      const results = Array.isArray(data?.results) ? data.results : [];
+      const aggregated = [];
+
+      results.forEach((result) => {
+        const baseWord = result?.word || term;
+        const lexicalEntries = Array.isArray(result?.lexicalEntries)
+          ? result.lexicalEntries
+          : [];
+
+        lexicalEntries.forEach((lexicalEntry) => {
+          const pronunciations = Array.isArray(lexicalEntry?.pronunciations)
+            ? lexicalEntry.pronunciations
+                .map((pron) => pron?.phoneticSpelling || pron?.phoneticNotation)
+                .filter(Boolean)
+            : [];
+          const phonetic = pronunciations[0] || result?.pronunciations?.[0]?.phoneticSpelling || "";
+
+          const entryNodes = Array.isArray(lexicalEntry?.entries)
+            ? lexicalEntry.entries
+            : [];
+
+          const definitionPayloads = [];
+
+          entryNodes.forEach((entryNode) => {
+            const senses = Array.isArray(entryNode?.senses) ? entryNode.senses : [];
+            senses.forEach((sense) => {
+              const senseDefinitions = Array.isArray(sense?.definitions)
+                ? sense.definitions
+                : sense?.definition
+                ? [sense.definition]
+                : [];
+              const examples = Array.isArray(sense?.examples)
+                ? sense.examples
+                    .map((example) => example?.text || example)
+                    .filter(Boolean)
+                : [];
+
+              senseDefinitions.forEach((definition) => {
+                definitionPayloads.push({
+                  definition,
+                  example: examples[0] || "",
+                });
+              });
+
+              const subsenses = Array.isArray(sense?.subsenses) ? sense.subsenses : [];
+              subsenses.forEach((sub) => {
+                const subDefinitions = Array.isArray(sub?.definitions)
+                  ? sub.definitions
+                  : sub?.definition
+                  ? [sub.definition]
+                  : [];
+                const subExamples = Array.isArray(sub?.examples)
+                  ? sub.examples
+                      .map((example) => example?.text || example)
+                      .filter(Boolean)
+                  : [];
+
+                subDefinitions.forEach((definition) => {
+                  definitionPayloads.push({
+                    definition,
+                    example: subExamples[0] || examples[0] || "",
+                  });
+                });
+              });
+            });
+          });
+
+          const definitions = normalizeDefinitions(definitionPayloads);
+          if (!definitions.length) {
+            return;
+          }
+
+          aggregated.push({
+            word: baseWord,
+            phonetic: phonetic || "",
+            source: "Oxford", 
+            meanings: [
+              {
+                partOfSpeech:
+                  lexicalEntry?.lexicalCategory?.text ||
+                  lexicalEntry?.lexicalCategory ||
+                  "Definition",
+                definitions,
+              },
+            ],
+          });
+        });
+      });
+
+      return aggregated;
+    }
+
+    async function fetchOxfordEntries(term, parsedTerm, options = {}) {
+      const credentials = options.credentials || {};
+      const appId = credentials.appId || credentials.app_id;
+      const appKey = credentials.appKey || credentials.app_key;
+
+      if (!appId || !appKey) {
+        throw new Error("Oxford API credentials are missing.");
+      }
+
+      const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
+        ? parsedTerm.variants
+        : [term];
+
+      for (const variant of variants) {
+        const response = await fetch(
+          `https://od-api.oxforddictionaries.com/api/v2/entries/en/${encodeURIComponent(variant)}`,
+          {
+            headers: {
+              Accept: "application/json",
+              app_id: appId,
+              app_key: appKey,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            continue;
+          }
+          throw new Error("Oxford lookup failed");
+        }
+
+        const data = await response.json();
+        const entries = normalizeOxfordEntries(data, variant);
+        if (entries.length) {
+          return entries;
+        }
+      }
+
+      return [];
+    }
+
+    async function fetchSynonymEntries(term, parsedTerm) {
+      const queryTerm = parsedTerm?.term || term;
+      const response = await fetch(
+        `https://api.datamuse.com/words?rel_syn=${encodeURIComponent(queryTerm)}&max=30`
+      );
+
+      if (!response.ok) {
+        throw new Error("Synonym lookup failed");
+      }
+
+      const data = await response.json();
+      const synonyms = Array.isArray(data)
+        ? data
+            .map((item) => (typeof item === "string" ? item : item?.word))
+            .filter(Boolean)
+        : [];
+
+      if (!synonyms.length) {
+        return [];
+      }
+
+      return [
+        {
+          word: queryTerm,
+          source: "Synonyms",
+          isSynonymList: true,
+          synonyms,
+        },
+      ];
+    }
+
+    async function fetchSpellingSuggestions(term) {
+      if (!term) {
+        return [];
+      }
+
+      try {
+        const response = await fetch(
+          `https://api.datamuse.com/sug?s=${encodeURIComponent(term)}&max=6`
+        );
+        if (!response.ok) {
+          return [];
+        }
+        const data = await response.json();
+        return Array.isArray(data)
+          ? data
+              .map((item) => (typeof item === "string" ? item : item?.word))
+              .filter(Boolean)
+          : [];
+      } catch (error) {
+        console.warn("Spelling suggestion lookup failed", error);
+        return [];
+      }
     }
 
     const dictionaryProviders = {
@@ -809,70 +1829,131 @@
         label: "Free Dictionary",
         fetchEntries: fetchFreeDictionaryEntries,
         supportsEmbeddedSearch: true,
+        defaultEnabled: true,
+        type: "definition",
       },
       wiktionary: {
         id: "wiktionary",
         label: "Wiktionary",
         fetchEntries: fetchWiktionaryEntries,
         supportsEmbeddedSearch: true,
+        defaultEnabled: true,
+        type: "definition",
+      },
+      longman: {
+        id: "longman",
+        label: "Longman",
+        fetchEntries: fetchLongmanEntries,
+        supportsEmbeddedSearch: true,
+        defaultEnabled: false,
+        requiresCredentials: true,
+        credentialKeys: ["appId", "appKey"],
+        type: "definition",
+      },
+      merriam: {
+        id: "merriam",
+        label: "Merriam-Webster",
+        fetchEntries: fetchMerriamEntries,
+        supportsEmbeddedSearch: false,
+        defaultEnabled: false,
+        requiresCredentials: true,
+        credentialKeys: ["key"],
+        type: "definition",
+      },
+      oxford: {
+        id: "oxford",
+        label: "Oxford",
+        fetchEntries: fetchOxfordEntries,
+        supportsEmbeddedSearch: true,
+        defaultEnabled: false,
+        requiresCredentials: true,
+        credentialKeys: ["appId", "appKey"],
+        type: "definition",
       },
       urban: {
         id: "urban",
         label: "Urban Dictionary",
         fetchEntries: fetchUrbanEntries,
         supportsEmbeddedSearch: false,
+        defaultEnabled: false,
+        type: "definition",
+      },
+      synonyms: {
+        id: "synonyms",
+        label: "Synonyms",
+        fetchEntries: fetchSynonymEntries,
+        supportsEmbeddedSearch: false,
+        defaultEnabled: true,
+        type: "synonym",
       },
     };
 
-    async function searchWithinEntries(term, providerId) {
+    registerApiInput(longmanAppIdInput, "longman", "appId");
+    registerApiInput(longmanAppKeyInput, "longman", "appKey");
+    registerApiInput(merriamKeyInput, "merriam", "key");
+    registerApiInput(oxfordAppIdInput, "oxford", "appId");
+    registerApiInput(oxfordAppKeyInput, "oxford", "appKey");
+
+    initializeScopeButtons();
+    initializeDictionaryProviderOptions();
+
+    async function searchWithinEntries(parsedTerm, providerId, credentials = {}) {
       const provider = dictionaryProviders[providerId];
       if (!provider || !provider.supportsEmbeddedSearch) {
         return [];
       }
 
-      const tokens = term
-        .split(/\s+/)
-        .map((token) => token.trim())
-        .filter(Boolean);
+      const tokens = Array.isArray(parsedTerm?.tokens) && parsedTerm.tokens.length
+        ? parsedTerm.tokens
+        : (parsedTerm?.term || "")
+            .split(/\s+/)
+            .map((token) => token.trim())
+            .filter(Boolean);
+
       const seenTokens = new Set();
       const aggregated = [];
 
       for (const token of tokens) {
         const normalizedToken = token.toLowerCase();
-        if (seenTokens.has(normalizedToken)) {
+        if (!normalizedToken || seenTokens.has(normalizedToken)) {
           continue;
         }
         seenTokens.add(normalizedToken);
 
         try {
-          const entries = await provider.fetchEntries(token);
-          entries.forEach((entry) => {
-            const filteredMeanings = entry.meanings
-              .map((meaning) => {
-                const filteredDefinitions = meaning.definitions.filter(
-                  (definition) =>
-                    textContainsTerm(definition.definition, term) ||
-                    textContainsTerm(definition.example, term)
-                );
-                if (!filteredDefinitions.length) {
-                  return null;
-                }
-
-                return {
-                  partOfSpeech: meaning.partOfSpeech,
-                  definitions: filteredDefinitions,
-                };
-              })
-              .filter(Boolean);
-
-            if (filteredMeanings.length) {
-              aggregated.push({
-                ...entry,
-                meanings: filteredMeanings,
-                note: `Matches found inside entry for "${token}"`,
-              });
-            }
+          const tokenParsed = parseLookupTerm(token);
+          const entries = await provider.fetchEntries(tokenParsed.term, tokenParsed, {
+            credentials,
           });
+          entries
+            .filter((entry) => Array.isArray(entry?.meanings))
+            .forEach((entry) => {
+              const filteredMeanings = entry.meanings
+                .map((meaning) => {
+                  const filteredDefinitions = (meaning.definitions || []).filter(
+                    (definition) =>
+                      textContainsTerm(definition.definition, parsedTerm.term) ||
+                      textContainsTerm(definition.example, parsedTerm.term)
+                  );
+                  if (!filteredDefinitions.length) {
+                    return null;
+                  }
+
+                  return {
+                    partOfSpeech: meaning.partOfSpeech,
+                    definitions: filteredDefinitions,
+                  };
+                })
+                .filter(Boolean);
+
+              if (filteredMeanings.length) {
+                aggregated.push({
+                  ...entry,
+                  meanings: filteredMeanings,
+                  note: `Matches found inside entry for "${token}"`,
+                });
+              }
+            });
         } catch (error) {
           console.warn(`Embedded search failed for token "${token}"`, error);
         }
@@ -1324,52 +2405,87 @@
       }
     }
 
-    function buildDefinitionCard(entry, meaning, definitionIndex) {
-      const card = document.createElement("div");
-      card.className = "definition-card";
-
-      let headword = null;
-      if (entry.word) {
-        headword = document.createElement("h3");
-        headword.style.margin = "0 0 0.35rem 0";
-        headword.style.fontSize = "1.05rem";
-        headword.textContent = entry.word;
-        card.appendChild(headword);
+    function applyMaskedContent(element, text, lookupTerm) {
+      if (!element) {
+        return;
       }
 
-      const header = document.createElement("header");
-      const badgeGroup = document.createElement("div");
-      badgeGroup.style.display = "flex";
-      badgeGroup.style.flexWrap = "wrap";
-      badgeGroup.style.gap = "0.4rem";
-      badgeGroup.style.alignItems = "center";
+      if (!text) {
+        element.textContent = "";
+        return;
+      }
 
+      const masked = maskTargetInText(text, lookupTerm);
+      if (masked && masked !== text) {
+        element.innerHTML = masked;
+      } else {
+        element.textContent = text;
+      }
+    }
+
+    function createBadge(text, variant = "") {
+      const badge = document.createElement("span");
+      badge.className = "badge" + (variant ? " " + variant : "");
+      badge.textContent = text;
+      return badge;
+    }
+
+    function buildDefinitionEntry(entry, lookupTerm) {
+      const details = document.createElement("details");
+      details.className = "definition-entry";
+
+      const summary = document.createElement("summary");
+      const summaryText = document.createElement("div");
+      summaryText.className = "entry-summary-text";
+
+      const headword = document.createElement("span");
+      headword.className = "entry-headword";
+      headword.textContent = entry.word || lookupTerm;
+      summaryText.appendChild(headword);
+
+      const badgeRow = document.createElement("div");
+      badgeRow.className = "badge-row";
       if (entry.isExistingNote) {
-        const existingBadge = document.createElement("span");
-        existingBadge.className = "badge";
-        existingBadge.textContent = "Existing card";
-        badgeGroup.appendChild(existingBadge);
+        badgeRow.appendChild(createBadge("Existing card"));
       }
-
       if (entry.source) {
-        const sourceBadge = document.createElement("span");
-        sourceBadge.className = "badge secondary";
-        sourceBadge.textContent = entry.source;
-        badgeGroup.appendChild(sourceBadge);
+        badgeRow.appendChild(createBadge(entry.source, "secondary"));
+      }
+      const partLabels = new Set();
+      (entry.meanings || []).forEach((meaning) => {
+        if (meaning?.partOfSpeech) {
+          partLabels.add(meaning.partOfSpeech);
+        }
+      });
+      if (!partLabels.size) {
+        partLabels.add("Definition");
+      }
+      partLabels.forEach((label) => badgeRow.appendChild(createBadge(label)));
+      summaryText.appendChild(badgeRow);
+
+      summary.appendChild(summaryText);
+      details.appendChild(summary);
+
+      const content = document.createElement("div");
+      content.className = "entry-content";
+
+      if (entry.note) {
+        const noteParagraph = document.createElement("p");
+        noteParagraph.style.margin = "0";
+        noteParagraph.textContent = entry.note;
+        content.appendChild(noteParagraph);
       }
 
-      const partOfSpeech = document.createElement("span");
-      partOfSpeech.className = "badge";
-      partOfSpeech.textContent = meaning.partOfSpeech || "Definition";
-      badgeGroup.appendChild(partOfSpeech);
-
-      header.appendChild(badgeGroup);
+      if (entry.phonetic) {
+        const phonetic = document.createElement("p");
+        phonetic.style.margin = "0";
+        phonetic.innerHTML = `<strong>Phonetic:</strong> ${entry.phonetic}`;
+        content.appendChild(phonetic);
+      }
 
       if (entry.isExistingNote && entry.noteDetails) {
-        const buttonGroup = document.createElement("div");
-        buttonGroup.style.display = "flex";
-        buttonGroup.style.flexWrap = "wrap";
-        buttonGroup.style.gap = "0.5rem";
+        const actions = document.createElement("div");
+        actions.className = "entry-actions";
 
         const loadButton = document.createElement("button");
         loadButton.textContent = "Load this card";
@@ -1380,6 +2496,7 @@
             : "";
           setStatus(`Existing card loaded${deckLabel}.`, "success");
         });
+        actions.appendChild(loadButton);
 
         const updateButton = document.createElement("button");
         updateButton.textContent = "Update card";
@@ -1395,158 +2512,243 @@
               );
               if (entry.noteDetails.display.frontText) {
                 entry.word = entry.noteDetails.display.frontText;
-                if (headword) {
-                  headword.textContent = entry.noteDetails.display.frontText;
-                }
+                headword.textContent = entry.word;
               }
             }
             if (entry.noteDetails.fieldMap.back) {
               entry.noteDetails.fields.backHtml = backField.value.trim();
-              entry.noteDetails.display.backText = stripHtml(
-                entry.noteDetails.fields.backHtml
-              );
-              if (meaning.definitions[definitionIndex]) {
-                meaning.definitions[definitionIndex].definition =
-                  entry.noteDetails.display.backText || "";
-              }
             }
             if (entry.noteDetails.fieldMap.example) {
               entry.noteDetails.fields.exampleHtml = exampleField.value.trim();
-              entry.noteDetails.display.exampleText = stripHtml(
-                entry.noteDetails.fields.exampleHtml
-              );
-              if (meaning.definitions[definitionIndex]) {
-                meaning.definitions[definitionIndex].example =
-                  entry.noteDetails.display.exampleText || "";
-              }
             }
-            if (definitionText) {
-              definitionText.textContent =
-                meaning.definitions[definitionIndex]?.definition || "";
-            }
-            if (exampleParaRef) {
-              exampleParaRef.textContent =
-                meaning.definitions[definitionIndex]?.example || "";
-            }
-            updatePreview();
-            const deckLabel = entry.noteDetails.deckName
-              ? ` in "${entry.noteDetails.deckName}"`
-              : "";
-            setStatus(`Existing card updated${deckLabel}.`, "success");
+            setStatus("Existing card updated.", "success");
           } catch (error) {
-            setStatus(error.message || "Failed to update card", "error");
+            console.error(error);
+            setStatus(error.message || "Failed to update note", "error");
           } finally {
             updateButton.disabled = false;
           }
         });
+        actions.appendChild(updateButton);
 
-        buttonGroup.appendChild(loadButton);
-        buttonGroup.appendChild(updateButton);
-        header.appendChild(buttonGroup);
-      } else {
-        const button = document.createElement("button");
-        button.textContent = "Use this meaning";
-        button.addEventListener("click", () => {
-          const definitionText = meaning.definitions[definitionIndex]?.definition || "";
-          const exampleText = meaning.definitions[definitionIndex]?.example || "";
-          const lookupTerm = lookupTermInput.value.trim();
-          frontField.value = lookupTerm;
-          const maskedDefinition = maskTargetInText(definitionText, lookupTerm);
-          backField.value = maskedDefinition;
-          if (exampleText) {
-            exampleField.value = maskTargetInText(exampleText, lookupTerm);
-          }
-          updatePreview();
-          const sourceLabel = entry.source ? ` (${entry.source})` : "";
-          setStatus(`Definition inserted into the card editor${sourceLabel}`, "success");
-        });
-        header.appendChild(button);
+        content.appendChild(actions);
       }
 
-      card.appendChild(header);
+      (entry.meanings || []).forEach((meaning) => {
+        const meaningBlock = document.createElement("div");
+        meaningBlock.className = "meaning-block";
 
-      if (entry.note) {
-        const note = document.createElement("p");
-        note.style.margin = "0";
-        note.style.fontSize = "0.85rem";
-        note.style.color = "#4a5781";
-        note.textContent = entry.note;
-        card.appendChild(note);
-      }
-
-      const definitionText = document.createElement("p");
-      definitionText.className = "definition-text";
-      definitionText.textContent = meaning.definitions[definitionIndex]?.definition || "";
-      card.appendChild(definitionText);
-
-      let exampleParaRef = null;
-      const example = meaning.definitions[definitionIndex]?.example;
-      if (example) {
-        const examplePara = document.createElement("p");
-        examplePara.className = "example-text";
-        examplePara.textContent = example;
-        if (entry.isExistingNote) {
-          exampleParaRef = examplePara;
-          card.appendChild(examplePara);
-        } else {
-          const exampleButton = document.createElement("button");
-          exampleButton.textContent = "Use this example";
-          exampleButton.addEventListener("click", () => {
-            const lookupTerm = lookupTermInput.value.trim();
-            exampleField.value = maskTargetInText(example, lookupTerm);
-            updatePreview();
-            setStatus("Example added to the card", "success");
-          });
-
-          const exampleWrapper = document.createElement("div");
-          exampleWrapper.style.display = "grid";
-          exampleWrapper.style.gap = "0.6rem";
-          exampleWrapper.appendChild(examplePara);
-          exampleWrapper.appendChild(exampleButton);
-          card.appendChild(exampleWrapper);
+        const meaningTitle = document.createElement("div");
+        meaningTitle.className = "meaning-title";
+        meaningTitle.appendChild(createBadge(meaning.partOfSpeech || "Definition"));
+        const definitionCount = Array.isArray(meaning.definitions)
+          ? meaning.definitions.length
+          : 0;
+        if (definitionCount > 1) {
+          meaningTitle.appendChild(createBadge(`${definitionCount} defs`, "secondary"));
         }
-      }
+        meaningBlock.appendChild(meaningTitle);
 
-      if (entry.phonetic) {
-        const phonetic = document.createElement("p");
-        phonetic.style.margin = "0";
-        phonetic.innerHTML = `<strong>Phonetic:</strong> ${entry.phonetic}`;
-        card.appendChild(phonetic);
-      }
+        const definitionList = document.createElement("ol");
+        definitionList.className = "definition-list";
 
-      return card;
+        (meaning.definitions || []).forEach((definition) => {
+          const listItem = document.createElement("li");
+          listItem.className = "definition-item";
+
+          const definitionText = document.createElement("p");
+          definitionText.className = "definition-text";
+          applyMaskedContent(definitionText, definition.definition, lookupTerm);
+          listItem.appendChild(definitionText);
+
+          if (definition.example) {
+            const exampleText = document.createElement("p");
+            exampleText.className = "example-text";
+            applyMaskedContent(exampleText, definition.example, lookupTerm);
+
+            if (entry.isExistingNote) {
+              listItem.appendChild(exampleText);
+            } else {
+              const exampleButton = document.createElement("button");
+              exampleButton.textContent = "Use this example";
+              exampleButton.addEventListener("click", () => {
+                exampleField.value = maskTargetInText(
+                  definition.example,
+                  lookupTerm
+                );
+                updatePreview();
+                setStatus("Example added to the card", "success");
+              });
+
+              const exampleWrapper = document.createElement("div");
+              exampleWrapper.style.display = "grid";
+              exampleWrapper.style.gap = "0.4rem";
+              exampleWrapper.appendChild(exampleText);
+              exampleWrapper.appendChild(exampleButton);
+              listItem.appendChild(exampleWrapper);
+            }
+          }
+
+          definitionList.appendChild(listItem);
+        });
+
+        meaningBlock.appendChild(definitionList);
+        content.appendChild(meaningBlock);
+      });
+
+      details.appendChild(content);
+      return details;
     }
 
-    function renderDictionaryResults(entries) {
+    function buildSynonymEntry(entry, lookupTerm) {
+      if (!Array.isArray(entry.synonyms) || !entry.synonyms.length) {
+        return null;
+      }
+
+      const details = document.createElement("details");
+      details.className = "definition-entry";
+
+      const summary = document.createElement("summary");
+      const summaryText = document.createElement("div");
+      summaryText.className = "entry-summary-text";
+
+      const headword = document.createElement("span");
+      headword.className = "entry-headword";
+      headword.textContent = `Synonyms for ${entry.word || lookupTerm}`;
+      summaryText.appendChild(headword);
+
+      const badgeRow = document.createElement("div");
+      badgeRow.className = "badge-row";
+      badgeRow.appendChild(createBadge(entry.source || "Synonyms", "secondary"));
+      summaryText.appendChild(badgeRow);
+
+      summary.appendChild(summaryText);
+      details.appendChild(summary);
+
+      const content = document.createElement("div");
+      content.className = "entry-content";
+
+      const intro = document.createElement("p");
+      intro.style.margin = "0";
+      intro.textContent = "Click a synonym to search it.";
+      content.appendChild(intro);
+
+      const cloud = document.createElement("div");
+      cloud.className = "synonym-cloud";
+      entry.synonyms.slice(0, 40).forEach((synonym) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = synonym;
+        button.addEventListener("click", () => {
+          lookupTermInput.value = synonym;
+          searchDictionary();
+        });
+        cloud.appendChild(button);
+      });
+
+      content.appendChild(cloud);
+      details.appendChild(content);
+      return details;
+    }
+
+    function renderSpellingSuggestionsList(suggestions, parsedTerm) {
+      if (!spellingSuggestions) {
+        return;
+      }
+
+      const filtered = Array.isArray(suggestions)
+        ? suggestions.filter(
+            (suggestion) =>
+              suggestion &&
+              suggestion.toLowerCase() !== (parsedTerm?.term || "").toLowerCase()
+          )
+        : [];
+
+      if (!filtered.length) {
+        spellingSuggestions.hidden = true;
+        spellingSuggestions.innerHTML = "";
+        return;
+      }
+
+      spellingSuggestions.hidden = false;
+      spellingSuggestions.innerHTML = "";
+
+      const label = document.createElement("span");
+      label.textContent = "Possible spellings:";
+      spellingSuggestions.appendChild(label);
+
+      filtered.forEach((suggestion) => {
+        const suggestionButton = document.createElement("button");
+        suggestionButton.type = "button";
+        suggestionButton.textContent = suggestion;
+        suggestionButton.addEventListener("click", () => {
+          lookupTermInput.value = suggestion;
+          searchDictionary();
+        });
+        spellingSuggestions.appendChild(suggestionButton);
+      });
+    }
+
+    function renderDictionaryResults(entries, parsedTerm) {
       dictionaryResults.innerHTML = "";
       if (!entries || !entries.length) {
         dictionaryResults.textContent = "No results found.";
         return;
       }
 
-      entries.forEach((entry) => {
-        entry.meanings.forEach((meaning) => {
-          meaning.definitions.forEach((_def, index) => {
-            dictionaryResults.appendChild(buildDefinitionCard(entry, meaning, index));
-          });
-        });
+      entries.forEach((entry, index) => {
+        let element = null;
+        if (entry.isSynonymList) {
+          element = buildSynonymEntry(entry, parsedTerm.term);
+        } else {
+          element = buildDefinitionEntry(entry, parsedTerm.term);
+          if (element && index === 0) {
+            element.open = true;
+          }
+        }
+
+        if (element) {
+          dictionaryResults.appendChild(element);
+        }
       });
     }
 
     async function searchDictionary() {
-      const term = lookupTermInput.value.trim();
-      if (!term) {
+      const rawInput = lookupTermInput.value.trim();
+      if (!rawInput) {
         setStatus("Type a term to search", "error");
         return;
       }
 
-      setStatus(`Searching all dictionaries for "${term}"…`);
+      const parsedTerm = parseLookupTerm(rawInput);
+      if (!parsedTerm.term) {
+        setStatus("Type a term to search", "error");
+        return;
+      }
+
+      lastPartOfSpeechFilter = parsedTerm.partOfSpeech;
+      updateDictionaryScopeLabel(parsedTerm.partOfSpeech);
+
+      const shouldSearchOnline = activeSearchScope !== SEARCH_SCOPES.decksOnly;
+      const shouldSearchDecks = activeSearchScope !== SEARCH_SCOPES.onlineOnly;
+
+      const scopeLabel = shouldSearchOnline && shouldSearchDecks
+        ? "online dictionaries and decks"
+        : shouldSearchOnline
+        ? "online dictionaries"
+        : "your decks";
+
+      setStatus(`Searching ${scopeLabel} for "${parsedTerm.term}"…`);
       searchButton.disabled = true;
       dictionaryResults.textContent = "Searching…";
+      renderSpellingSuggestionsList([], parsedTerm);
 
+      const providerIds = shouldSearchOnline ? getActiveDictionaryProviderIds() : [];
       const uniqueEntryKeys = new Set();
       const collectedEntries = [];
       const contributingProviders = new Set();
+      const missingCredentials = [];
+      const providerErrors = [];
       let embeddedMatchCount = 0;
 
       const addEntries = (entries, providerLabel = "", options = {}) => {
@@ -1558,16 +2760,26 @@
         const iterable = prepend ? [...entries].reverse() : entries;
 
         iterable.forEach((entry) => {
-          if (!entry || !Array.isArray(entry.meanings) || !entry.meanings.length) {
+          if (!entry) {
+            return;
+          }
+
+          if (entry.isSynonymList) {
+            if (!Array.isArray(entry.synonyms) || !entry.synonyms.length) {
+              return;
+            }
+          } else if (!Array.isArray(entry.meanings) || !entry.meanings.length) {
             return;
           }
 
           const key = entry.uniqueKey
             ? entry.uniqueKey
+            : entry.isSynonymList
+            ? `syn-${(entry.source || providerLabel || "").toLowerCase()}-${(entry.word || "").toLowerCase()}-${entry.synonyms.join("|")}`
             : JSON.stringify({
-                source: entry.source || "",
+                source: entry.source || providerLabel || "",
                 word: entry.word || "",
-                meanings: entry.meanings.map((meaning) => ({
+                meanings: (entry.meanings || []).map((meaning) => ({
                   partOfSpeech: meaning.partOfSpeech || "",
                   definitions: (meaning.definitions || []).map((definition) => ({
                     definition: definition.definition || "",
@@ -1576,61 +2788,105 @@
                 })),
               });
 
-          if (!uniqueEntryKeys.has(key)) {
-            uniqueEntryKeys.add(key);
-            if (prepend) {
-              collectedEntries.unshift(entry);
-            } else {
-              collectedEntries.push(entry);
-            }
-            const contributorLabel = entry.source || providerLabel;
-            if (trackProvider && contributorLabel) {
-              contributingProviders.add(contributorLabel);
+          if (uniqueEntryKeys.has(key)) {
+            return;
+          }
+          uniqueEntryKeys.add(key);
+
+          if (prepend) {
+            collectedEntries.unshift(entry);
+          } else {
+            collectedEntries.push(entry);
+          }
+
+          if (trackProvider) {
+            const contributor = entry.source || providerLabel;
+            if (contributor) {
+              contributingProviders.add(contributor);
             }
           }
         });
       };
 
       try {
-        const providerIds = Object.keys(dictionaryProviders);
-        const deckName = deckSelect.value;
+        const suggestionsPromise = shouldSearchOnline
+          ? fetchSpellingSuggestions(parsedTerm.term)
+          : Promise.resolve([]);
 
-        const [providerResponses, deckLookupSummary] = await Promise.all([
-          Promise.all(
-            providerIds.map(async (providerId) => {
-              const provider = dictionaryProviders[providerId];
-              if (!provider) {
-                return { providerId, entries: [], embeddedCount: 0 };
+        const deckLookupPromise = shouldSearchDecks
+          ? findDeckEntries(parsedTerm.term, deckSelect.value)
+          : Promise.resolve({
+              deckName: deckSelect.value || "",
+              entries: [],
+              totalCount: 0,
+              shownCount: 0,
+              truncated: false,
+              error: "",
+            });
+
+        const providerResponses = await Promise.all(
+          providerIds.map(async (providerId) => {
+            const provider = dictionaryProviders[providerId];
+            if (!provider) {
+              return { providerId, entries: [], embeddedCount: 0, skipped: false };
+            }
+
+            const credentials = getProviderCredentials(provider.id);
+            if (provider.requiresCredentials) {
+              const requiredKeys = Array.isArray(provider.credentialKeys)
+                ? provider.credentialKeys
+                : [];
+              const missingKeys = requiredKeys.filter((key) => !credentials[key]);
+              if (missingKeys.length) {
+                missingCredentials.push(provider.label || providerId);
+                return { providerId, entries: [], embeddedCount: 0, skipped: true };
               }
+            }
 
-              const providerEntries = [];
-              let providerEmbeddedCount = 0;
-              const providerLabel = provider.label || providerId;
+            const providerEntries = [];
+            let providerEmbeddedCount = 0;
 
-              try {
-                const directEntries = await provider.fetchEntries(term);
-                if (Array.isArray(directEntries)) {
-                  providerEntries.push(...directEntries);
-                }
-              } catch (error) {
-                console.warn(`Lookup failed for ${providerLabel}`, error);
+            try {
+              const directEntries = await provider.fetchEntries(parsedTerm.term, parsedTerm, {
+                credentials,
+              });
+              if (Array.isArray(directEntries)) {
+                providerEntries.push(...directEntries);
               }
+            } catch (error) {
+              console.warn(`Lookup failed for ${provider.label || providerId}`, error);
+              if (error?.message) {
+                providerErrors.push(`${provider.label || providerId}: ${error.message}`);
+              }
+            }
 
+            if (provider.supportsEmbeddedSearch && parsedTerm.tokens.length > 1) {
               try {
-                const embeddedEntries = await searchWithinEntries(term, providerId);
+                const embeddedEntries = await searchWithinEntries(parsedTerm, providerId, credentials);
                 providerEmbeddedCount += embeddedEntries.length;
                 if (Array.isArray(embeddedEntries)) {
                   providerEntries.push(...embeddedEntries);
                 }
               } catch (embeddedError) {
-                console.warn(`Embedded search failed for ${providerLabel}`, embeddedError);
+                console.warn(`Embedded search failed for ${provider.label || providerId}`, embeddedError);
               }
+            }
 
-              return { providerId, entries: providerEntries, embeddedCount: providerEmbeddedCount };
-            })
-          ),
-          findDeckEntries(term, deckName),
-        ]);
+            const filteredEntries = providerEntries
+              .map((entry) =>
+                entry && !entry.isSynonymList
+                  ? filterEntryByPartOfSpeech(entry, parsedTerm.partOfSpeech)
+                  : entry
+              )
+              .filter(Boolean);
+
+            return { providerId, entries: filteredEntries, embeddedCount: providerEmbeddedCount };
+          })
+        );
+
+        const deckLookupSummary = await deckLookupPromise;
+        const suggestions = await suggestionsPromise.catch(() => []);
+        renderSpellingSuggestionsList(suggestions, parsedTerm);
 
         providerResponses.forEach(({ providerId, entries, embeddedCount }) => {
           embeddedMatchCount += embeddedCount;
@@ -1646,36 +2902,43 @@
         }
 
         if (!collectedEntries.length) {
-          renderDictionaryResults([]);
+          renderDictionaryResults([], parsedTerm);
           let emptyMessage = "No entries available.";
           if (deckLookupSummary.deckName && deckLookupSummary.error) {
             emptyMessage += ` Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`;
+          }
+          if (missingCredentials.length) {
+            emptyMessage += ` Skipped ${missingCredentials.join(", ")} (missing credentials).`;
           }
           setStatus(emptyMessage, "error");
           return;
         }
 
-        renderDictionaryResults(collectedEntries);
-        const providerCount = contributingProviders.size;
-        const totalProviders = providerIds.length;
-        const providerList = Array.from(contributingProviders);
-        let providerSummary;
-        if (providerCount === totalProviders && providerCount > 0) {
-          providerSummary = "all dictionaries";
-        } else if (providerCount === 1) {
-          providerSummary = providerList[0];
-        } else if (providerCount > 1) {
-          providerSummary = `${providerCount} dictionaries (${providerList.join(", ")})`;
-        } else {
-          providerSummary = "the available dictionaries";
+        renderDictionaryResults(collectedEntries, parsedTerm);
+
+        const statusParts = [];
+
+        if (shouldSearchOnline) {
+          const providerList = Array.from(contributingProviders);
+          let providerSummary;
+          if (!providerIds.length) {
+            providerSummary = "no online dictionaries";
+          } else if (!providerList.length) {
+            providerSummary = providerIds.length === 1
+              ? dictionaryProviders[providerIds[0]]?.label || providerIds[0]
+              : "selected dictionaries";
+          } else if (providerList.length === 1) {
+            providerSummary = providerList[0];
+          } else {
+            providerSummary = `${providerList.length} dictionaries (${providerList.join(", ")})`;
+          }
+          const embeddedNote = embeddedMatchCount
+            ? ` including ${embeddedMatchCount} embedded match${embeddedMatchCount === 1 ? "" : "es"}`
+            : "";
+          statusParts.push(`Dictionary results loaded from ${providerSummary}${embeddedNote}.`);
         }
 
-        const embeddedNote = embeddedMatchCount
-          ? ` including ${embeddedMatchCount} embedded match${embeddedMatchCount === 1 ? "" : "es"}`
-          : "";
-        const statusParts = [`Dictionary results loaded from ${providerSummary}${embeddedNote}.`];
-
-        if (deckLookupSummary.deckName) {
+        if (shouldSearchDecks && deckLookupSummary.deckName) {
           if (deckLookupSummary.error) {
             statusParts.push(
               `Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`
@@ -1685,17 +2948,24 @@
               deckLookupSummary.totalCount === 1 ? "" : "s"
             } in "${deckLookupSummary.deckName}"`;
             if (deckLookupSummary.truncated && deckLookupSummary.shownCount) {
-              deckMessage += ` (showing first ${deckLookupSummary.shownCount}).`;
-            } else {
-              deckMessage += ".";
+              deckMessage += ` (showing first ${deckLookupSummary.shownCount})`;
             }
+            deckMessage += ".";
             statusParts.push(deckMessage);
           } else {
             statusParts.push(`No existing cards matched in "${deckLookupSummary.deckName}".`);
           }
         }
 
-        const statusType = deckLookupSummary.error ? "error" : "success";
+        if (missingCredentials.length) {
+          statusParts.push(`Skipped ${missingCredentials.join(", ")} (missing credentials).`);
+        }
+
+        if (providerErrors.length) {
+          statusParts.push(`Dictionary errors: ${providerErrors.join("; ")}.`);
+        }
+
+        const statusType = deckLookupSummary.error || providerErrors.length ? "error" : "success";
         setStatus(statusParts.join(" "), statusType);
       } catch (error) {
         console.error(error);
@@ -1705,7 +2975,6 @@
         searchButton.disabled = false;
       }
     }
-
     async function addCard() {
       const deckName = deckSelect.value;
       const modelName = modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
