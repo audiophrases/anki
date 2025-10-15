@@ -3022,25 +3022,41 @@
             if (entry.isExistingNote) {
               listItem.appendChild(exampleText);
             } else {
-              const exampleButton = document.createElement("button");
-              exampleButton.textContent = "Use this example";
-              exampleButton.addEventListener("click", () => {
-                exampleField.value = maskTargetInText(
-                  definition.example,
-                  lookupTerm
-                );
-                updatePreview();
-                setStatus("Example added to the card", "success");
-              });
+            const exampleButton = document.createElement("button");
+            exampleButton.textContent = "Use this example";
+            exampleButton.addEventListener("click", () => {
+              exampleField.value = maskTargetInText(
+                definition.example,
+                lookupTerm
+              );
+              updatePreview();
+              setStatus("Example added to the card", "success");
+            });
 
-              const exampleWrapper = document.createElement("div");
-              exampleWrapper.style.display = "grid";
-              exampleWrapper.style.gap = "0.4rem";
-              exampleWrapper.appendChild(exampleText);
-              exampleWrapper.appendChild(exampleButton);
-              listItem.appendChild(exampleWrapper);
-            }
+            const definitionButton = document.createElement("button");
+            definitionButton.textContent = "Use this definition";
+            definitionButton.addEventListener("click", () => {
+              backField.value = maskTargetInText(
+                definition.definition,
+                lookupTerm
+              );
+              if (!frontField.value.trim()) {
+                frontField.value = entry.word || lookupTerm;
+              }
+              refreshMaskedWordField();
+              updatePreview();
+              setStatus("Definition added to the card", "success");
+            });
+
+            const exampleWrapper = document.createElement("div");
+            exampleWrapper.style.display = "grid";
+            exampleWrapper.style.gap = "0.4rem";
+            exampleWrapper.appendChild(exampleText);
+            exampleWrapper.appendChild(exampleButton);
+            exampleWrapper.appendChild(definitionButton);
+            listItem.appendChild(exampleWrapper);
           }
+        }
 
           definitionList.appendChild(listItem);
         });
