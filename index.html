@@ -119,6 +119,53 @@
       box-shadow: 0 10px 30px rgba(43, 58, 92, 0.1);
     }
 
+    .setup-notice {
+      border: 1px solid rgba(63, 100, 199, 0.18);
+      background: linear-gradient(
+        135deg,
+        rgba(63, 100, 199, 0.14),
+        rgba(70, 80, 172, 0.04)
+      );
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .setup-notice.is-hidden {
+      display: none;
+    }
+
+    .setup-steps {
+      margin: 0;
+      padding-left: 1.2rem;
+      color: #2f4075;
+    }
+
+    .setup-steps li + li {
+      margin-top: 0.4rem;
+    }
+
+    .setup-snippet {
+      background: rgba(63, 100, 199, 0.12);
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      font-family: "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      font-size: 0.9rem;
+      color: #1f2b4a;
+      overflow-x: auto;
+    }
+
+    .setup-snippet pre {
+      margin: 0;
+      white-space: pre;
+    }
+
+    .setup-footnote {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #3f4d7a;
+    }
+
     .panel h2 {
       margin-top: 0;
       font-size: 1.35rem;
@@ -257,6 +304,40 @@
     </aside>
 
     <main class="main">
+      <section
+        class="panel setup-notice"
+        id="setup-notice"
+        aria-live="polite"
+      >
+        <h2>Set up AnkiConnect for GitHub Pages</h2>
+        <p style="margin: 0;">
+          Allow this page to talk to AnkiConnect so decks and cards can be
+          managed from the browser.
+        </p>
+        <ol class="setup-steps">
+          <li>
+            In Anki, open <strong>Tools → Add-ons → AnkiConnect → Config</strong>.
+          </li>
+          <li>
+            Add your GitHub Pages URL to the <code>webCorsOriginList</code>
+            setting.
+          </li>
+          <li>Save the configuration and restart Anki if prompted.</li>
+        </ol>
+        <div class="setup-snippet" role="region" aria-label="Sample AnkiConnect configuration">
+          <pre><code>{
+  "webCorsOriginList": [
+    "https://&lt;your-username&gt;.github.io",
+    "https://&lt;your-username&gt;.github.io/anki/"
+  ]
+}</code></pre>
+        </div>
+        <p class="setup-footnote">
+          This notice hides automatically after AnkiConnect responds
+          successfully.
+        </p>
+      </section>
+
       <section class="panel" id="dictionary-panel">
         <h2>Dictionary Lookup</h2>
         <div class="dictionary-controls">
@@ -322,6 +403,7 @@
     const modelNameInput = document.getElementById("model-name");
     const modelSuggestions = document.getElementById("model-suggestions");
     const tagsInput = document.getElementById("tags");
+    const setupNotice = document.getElementById("setup-notice");
 
     const previewDeck = document.getElementById("preview-deck");
     const previewModel = document.getElementById("preview-model");
@@ -333,6 +415,7 @@
     const SESSION_KEYS = {
       credentials: "anki.session.credentials",
       deck: "anki.session.deck",
+      setupNoticeDismissed: "anki.session.setupDismissed",
     };
 
     const DEFAULT_MODEL_NAME = "Basic";
@@ -401,6 +484,36 @@
     function setStatus(message, type = "") {
       statusEl.textContent = message;
       statusEl.className = "status" + (type ? " " + type : "");
+    }
+
+    function hideSetupNotice() {
+      if (setupNotice) {
+        setupNotice.classList.add("is-hidden");
+      }
+    }
+
+    function showSetupNotice() {
+      if (setupNotice) {
+        setupNotice.classList.remove("is-hidden");
+      }
+    }
+
+    let hasSuccessfulAnkiConnect =
+      getSessionItem(SESSION_KEYS.setupNoticeDismissed) === "true";
+
+    if (hasSuccessfulAnkiConnect) {
+      hideSetupNotice();
+    } else {
+      showSetupNotice();
+    }
+
+    function markAnkiConnectSuccess() {
+      if (hasSuccessfulAnkiConnect) {
+        return;
+      }
+      hasSuccessfulAnkiConnect = true;
+      hideSetupNotice();
+      setSessionItem(SESSION_KEYS.setupNoticeDismissed, "true");
     }
 
     const savedCredentials = safeParseJSON(getSessionItem(SESSION_KEYS.credentials), {});
@@ -488,6 +601,8 @@
       if (data.error) {
         throw new Error(data.error);
       }
+
+      markAnkiConnectSuccess();
 
       return data.result;
     }
