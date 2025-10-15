@@ -1933,92 +1933,6 @@
       return entries;
     }
 
-    function normalizeOxfordEntries(documentNode, term) {
-      if (!documentNode) {
-        return [];
-      }
-
-      const definitionNodes = Array.from(
-        documentNode.querySelectorAll(".sense .def, span.def, p.def")
-      );
-
-      if (!definitionNodes.length) {
-        return [];
-      }
-
-      const meaningMap = new Map();
-      let fallbackIndex = 1;
-
-      definitionNodes.forEach((node) => {
-        const definition = extractNodeText(node);
-        if (!definition) {
-          return;
-        }
-
-        const senseNode =
-          node.closest(".sense") ||
-          node.closest(".subsense") ||
-          node.closest("[data-sense-id]") ||
-          null;
-
-        const exampleNode = senseNode
-          ? senseNode.querySelector(".x, .example, .examples .x, .sense-example")
-          : null;
-        const example = extractNodeText(exampleNode);
-
-        let partOfSpeech = "";
-        if (senseNode) {
-          partOfSpeech = queryTextContent(senseNode, [".pos", ".partOfSpeech", ".posgram"]);
-        }
-        if (!partOfSpeech) {
-          partOfSpeech = queryTextContent(
-            node.closest(".entry") || documentNode,
-            [".pos", ".partOfSpeech", ".posgram"]
-          );
-        }
-        if (!partOfSpeech) {
-          partOfSpeech = `Sense ${fallbackIndex}`;
-          fallbackIndex += 1;
-        }
-
-        if (!meaningMap.has(partOfSpeech)) {
-          meaningMap.set(partOfSpeech, []);
-        }
-
-        meaningMap.get(partOfSpeech).push({ definition, example });
-      });
-
-      const meanings = Array.from(meaningMap.entries())
-        .map(([partOfSpeech, definitionList]) => {
-          const normalized = normalizeDefinitions(definitionList);
-          if (!normalized.length) {
-            return null;
-          }
-          return {
-            partOfSpeech,
-            definitions: normalized,
-          };
-        })
-        .filter(Boolean);
-
-      if (!meanings.length) {
-        return [];
-      }
-
-      const headword =
-        queryTextContent(documentNode, ["h1.headword", ".headword", "h1", "h2.headword"]) || term;
-      const phonetic = queryTextContent(documentNode, [".phonetics .phon", ".phonetic", ".phon"]);
-
-      return [
-        {
-          word: headword || term,
-          phonetic: phonetic || "",
-          source: "Oxford",
-          meanings,
-        },
-      ];
-    }
-
     async function fetchCambridgeEntries(term, parsedTerm) {
       const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
         ? parsedTerm.variants
@@ -2042,40 +1956,6 @@
           }
 
           const entries = normalizeCambridgeEntries(documentNode, variant);
-          if (entries.length) {
-            return entries;
-          }
-        }
-      }
-
-      return [];
-    }
-
-    async function fetchOxfordEntries(term, parsedTerm) {
-      const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
-        ? parsedTerm.variants
-        : [term];
-
-      for (const variant of variants) {
-        const tried = new Set();
-        for (const slugCandidate of buildDictionarySlugCandidates(variant)) {
-          if (tried.has(slugCandidate)) {
-            continue;
-          }
-          tried.add(slugCandidate);
-
-          const url = rewriteDictionaryRequestUrl(
-            `https://www.oxfordlearnersdictionaries.com/definition/english/${encodeURIComponent(
-              slugCandidate
-            )}`
-          );
-          const documentNode = await fetchHtmlDocument(url, { label: "Oxford lookup failed" });
-
-          if (!documentNode) {
-            continue;
-          }
-
-          const entries = normalizeOxfordEntries(documentNode, variant);
           if (entries.length) {
             return entries;
           }
@@ -2154,14 +2034,6 @@
         label: "Merriam-Webster",
         fetchEntries: fetchMerriamEntries,
         supportsEmbeddedSearch: false,
-        defaultEnabled: true,
-        type: "definition",
-      },
-      oxford: {
-        id: "oxford",
-        label: "Oxford",
-        fetchEntries: fetchOxfordEntries,
-        supportsEmbeddedSearch: true,
         defaultEnabled: true,
         type: "definition",
       },
