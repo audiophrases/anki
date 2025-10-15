@@ -410,6 +410,17 @@
       gap: 1rem;
     }
 
+    .additional-fields {
+      margin-top: 1.5rem;
+      display: grid;
+      gap: 1.25rem;
+    }
+
+    .additional-field {
+      display: grid;
+      gap: 0.5rem;
+    }
+
     @media (max-width: 980px) {
       body {
         padding: 1rem;
@@ -555,10 +566,14 @@
             <textarea id="back-field" placeholder="Back of the card"></textarea>
           </div>
         </div>
-        <div class="split" style="margin-top: 1.5rem;">
+        <div class="split" style="margin-top: 1.5rem;" id="example-field-wrapper">
           <label for="example-field">Example Sentence (optional)</label>
-          <textarea id="example-field" placeholder="Add your own or pick one from the dictionary results"></textarea>
+          <textarea
+            id="example-field"
+            placeholder="Add your own or pick one from the dictionary results"
+          ></textarea>
         </div>
+        <div class="additional-fields" id="additional-fields" hidden></div>
         <div style="margin-top: 1.5rem; display: flex; gap: 1rem; align-items: center;">
           <button id="add-card">Add Card to Deck</button>
           <span class="status" id="status"></span>
@@ -594,6 +609,11 @@
     const frontField = document.getElementById("front-field");
     const backField = document.getElementById("back-field");
     const exampleField = document.getElementById("example-field");
+    const frontFieldLabel = document.querySelector("label[for='front-field']");
+    const backFieldLabel = document.querySelector("label[for='back-field']");
+    const exampleFieldLabel = document.querySelector("label[for='example-field']");
+    const exampleFieldWrapper = document.getElementById("example-field-wrapper");
+    const additionalFieldsContainer = document.getElementById("additional-fields");
     const addCardBtn = document.getElementById("add-card");
     const statusEl = document.getElementById("status");
     const usernameInput = document.getElementById("anki-username");
@@ -616,6 +636,12 @@
     const previewBack = document.getElementById("preview-back");
     const previewExample = document.getElementById("preview-example");
 
+    const DEFAULT_FIELD_LABELS = {
+      front: frontFieldLabel ? frontFieldLabel.textContent : "Front",
+      back: backFieldLabel ? backFieldLabel.textContent : "Back",
+      example: exampleFieldLabel ? exampleFieldLabel.textContent : "Example Sentence (optional)",
+    };
+
     const SESSION_KEYS = {
       credentials: "anki.session.credentials",
       deck: "anki.session.deck",
@@ -637,6 +663,22 @@
       onlineOnly: "online-only",
       decksOnly: "decks-only",
     };
+
+    const modelFieldCache = new Map();
+    const pendingModelFieldRequests = new Map();
+    let modelFieldLoadToken = 0;
+    let activeModelFieldMetadata = {
+      modelName: "",
+      orderedFieldNames: [],
+      roleMap: {
+        word: null,
+        definition: null,
+        example: null,
+        masked: null,
+      },
+    };
+    const fieldEditors = new Map();
+    const additionalFieldEditors = new Map();
     const PART_OF_SPEECH_ALIASES = {
       noun: ["noun", "n", "n.", "countable noun", "uncountable noun", "plural noun"],
       verb: ["verb", "v", "v.", "transitive verb", "intransitive verb", "phrasal verb"],
@@ -649,6 +691,20 @@
       determiner: ["determiner", "det", "det.", "article"],
       idiom: ["idiom", "phrase", "set phrase", "expression", "idiomatic"],
     };
+    const FIELD_ROLE_ALIASES = {
+      word: ["word", "front", "term", "expression", "question", "prompt", "target"],
+      definition: [
+        "definition",
+        "meaning",
+        "back",
+        "translation",
+        "answer",
+        "response",
+        "explanation",
+      ],
+      example: ["example", "sentence", "usage", "context"],
+    };
+    const MASK_FIELD_ALIASES = ["w•••", "w...", "masked", "mask"];
 
     const htmlParser = document.createElement("div");
 
@@ -1151,13 +1207,26 @@
     }
 
     [frontField, backField, exampleField, tagsInput].forEach((element) => {
-      element.addEventListener("input", updatePreview);
-      element.addEventListener("change", updatePreview);
+      element.addEventListener("input", () => {
+        updatePreview();
+        if (element === frontField) {
+          refreshMaskedWordField();
+        }
+      });
+      element.addEventListener("change", () => {
+        updatePreview();
+        if (element === frontField) {
+          refreshMaskedWordField();
+        }
+      });
     });
 
-    function handleModelNameInput() {
+    function handleModelNameInput(event) {
       userModifiedNoteType = true;
       updatePreview();
+      if (event?.type === "change") {
+        refreshModelFieldsForCurrentModel();
+      }
     }
 
     modelNameInput.addEventListener("input", handleModelNameInput);
@@ -1997,15 +2066,412 @@
       return text.trim();
     }
 
-    function selectFieldEntry(fieldEntries, preferredNames = [], fallbackIndex = 0) {
-      const normalizedPreferences = preferredNames.map((name) => name.toLowerCase());
-      for (const [fieldName, payload] of fieldEntries) {
-        if (normalizedPreferences.includes(fieldName.toLowerCase())) {
-          return [fieldName, payload];
+    function normalizeFieldIdentifier(value) {
+      return (value || "").replace(/\s+/g, "").toLowerCase();
+    }
+
+    function createFieldEditorId(fieldName) {
+      const slug = (fieldName || "")
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      const fallback = Math.random().toString(36).slice(2, 10);
+      return `additional-${slug || fallback}`;
+    }
+
+    function computeFieldRoleMap(fieldNames = []) {
+      const normalizedEntries = fieldNames
+        .filter((name) => typeof name === "string" && name.trim())
+        .map((name, index) => ({
+          name,
+          index,
+          lower: name.toLowerCase(),
+          compact: normalizeFieldIdentifier(name),
+        }));
+
+      const used = new Set();
+      const roleMap = {
+        word: null,
+        definition: null,
+        example: null,
+        masked: null,
+      };
+
+      const findByAliases = (aliases = [], { allowPartial = true } = {}) => {
+        for (const alias of aliases) {
+          const aliasLower = alias.toLowerCase();
+          const aliasCompact = normalizeFieldIdentifier(alias);
+          for (const entry of normalizedEntries) {
+            if (used.has(entry.name)) {
+              continue;
+            }
+            if (entry.lower === aliasLower || entry.compact === aliasCompact) {
+              used.add(entry.name);
+              return entry.name;
+            }
+          }
+        }
+
+        if (!allowPartial) {
+          return null;
+        }
+
+        for (const alias of aliases) {
+          const aliasLower = alias.toLowerCase();
+          const aliasCompact = normalizeFieldIdentifier(alias);
+          for (const entry of normalizedEntries) {
+            if (used.has(entry.name)) {
+              continue;
+            }
+            if (
+              entry.lower.includes(aliasLower) ||
+              entry.compact.includes(aliasCompact)
+            ) {
+              used.add(entry.name);
+              return entry.name;
+            }
+          }
+        }
+
+        return null;
+      };
+
+      const maskedField = findByAliases(MASK_FIELD_ALIASES);
+      if (maskedField) {
+        roleMap.masked = maskedField;
+      }
+
+      const wordField = findByAliases(FIELD_ROLE_ALIASES.word);
+      if (wordField) {
+        roleMap.word = wordField;
+      }
+
+      const definitionField = findByAliases(FIELD_ROLE_ALIASES.definition);
+      if (definitionField) {
+        roleMap.definition = definitionField;
+      }
+
+      const exampleField = findByAliases(FIELD_ROLE_ALIASES.example);
+      if (exampleField) {
+        roleMap.example = exampleField;
+      }
+
+      if (!roleMap.word && normalizedEntries.length) {
+        const fallback = normalizedEntries.find((entry) => !used.has(entry.name));
+        if (fallback) {
+          roleMap.word = fallback.name;
+          used.add(fallback.name);
         }
       }
 
-      return fieldEntries[fallbackIndex] || null;
+      if (!roleMap.definition && normalizedEntries.length) {
+        const fallback = normalizedEntries.find((entry) => !used.has(entry.name));
+        if (fallback) {
+          roleMap.definition = fallback.name;
+          used.add(fallback.name);
+        }
+      }
+
+      if (!roleMap.example && normalizedEntries.length > 2) {
+        const fallback = normalizedEntries
+          .slice()
+          .reverse()
+          .find((entry) => !used.has(entry.name));
+        if (fallback) {
+          roleMap.example = fallback.name;
+          used.add(fallback.name);
+        }
+      }
+
+      return roleMap;
+    }
+
+    function deriveMaskedWordValue(wordValue) {
+      const plain = stripHtml(wordValue || "");
+      if (!plain) {
+        return "";
+      }
+      return maskTargetInText(plain, plain);
+    }
+
+    function updateNoteDetailsDisplay(noteDetails) {
+      if (!noteDetails) {
+        return;
+      }
+
+      const orderedFieldNames = Array.isArray(noteDetails.orderedFields)
+        ? noteDetails.orderedFields.map((field) => field.name)
+        : [];
+      const fields = noteDetails.fields || {};
+      const roleMap = noteDetails.roleMap || {};
+
+      const wordFieldName =
+        roleMap.word || orderedFieldNames[0] || Object.keys(fields)[0] || null;
+      const definitionFieldName =
+        roleMap.definition ||
+        orderedFieldNames.find((name) => name && name !== wordFieldName) ||
+        null;
+      const exampleFieldName = roleMap.example || null;
+
+      const frontValue = wordFieldName ? fields[wordFieldName] || "" : "";
+      const backValue = definitionFieldName ? fields[definitionFieldName] || "" : "";
+      const exampleValue = exampleFieldName ? fields[exampleFieldName] || "" : "";
+
+      noteDetails.display = {
+        frontText: stripHtml(frontValue),
+        backText: stripHtml(backValue),
+        exampleText: stripHtml(exampleValue),
+      };
+    }
+
+    function getActiveWordFieldName(metadata = activeModelFieldMetadata) {
+      if (!metadata) {
+        return null;
+      }
+      return (
+        metadata.roleMap?.word ||
+        (Array.isArray(metadata.orderedFieldNames)
+          ? metadata.orderedFieldNames[0]
+          : null)
+      );
+    }
+
+    function refreshMaskedWordField() {
+      const maskedFieldName = activeModelFieldMetadata.roleMap?.masked;
+      const wordFieldName = getActiveWordFieldName();
+      if (!maskedFieldName || !wordFieldName) {
+        return;
+      }
+
+      const wordEditor = fieldEditors.get(wordFieldName);
+      const maskedEditor = fieldEditors.get(maskedFieldName);
+      if (!wordEditor || !maskedEditor) {
+        return;
+      }
+
+      maskedEditor.value = deriveMaskedWordValue(wordEditor.value);
+    }
+
+    function applyModelFieldMetadata(
+      modelName,
+      orderedFieldNames = [],
+      roleMapOverride = null
+    ) {
+      const normalizedFieldNames = Array.isArray(orderedFieldNames)
+        ? orderedFieldNames.filter((name) => typeof name === "string" && name.trim())
+        : [];
+      const roleMap = roleMapOverride || computeFieldRoleMap(normalizedFieldNames);
+
+      const preservedValues = new Map();
+      fieldEditors.forEach((element, fieldName) => {
+        if (fieldName && element) {
+          preservedValues.set(fieldName, element.value);
+        }
+      });
+
+      fieldEditors.clear();
+      additionalFieldEditors.clear();
+
+      if (additionalFieldsContainer) {
+        additionalFieldsContainer.innerHTML = "";
+        additionalFieldsContainer.hidden = true;
+      }
+
+      const assignedFields = new Set();
+
+      const assignPrimaryEditor = (element, labelElement, defaultLabel, fieldName) => {
+        if (!element) {
+          return;
+        }
+
+        const previousValue =
+          fieldName && preservedValues.has(fieldName) ? preservedValues.get(fieldName) : "";
+        element.dataset.fieldName = fieldName || "";
+        element.value = fieldName ? previousValue : "";
+
+        if (labelElement) {
+          labelElement.textContent = fieldName || defaultLabel;
+        }
+
+        if (fieldName) {
+          fieldEditors.set(fieldName, element);
+          assignedFields.add(fieldName);
+        }
+      };
+
+      const wordFieldName = roleMap.word || normalizedFieldNames[0] || null;
+      const definitionFieldName =
+        roleMap.definition ||
+        normalizedFieldNames.find((name) => name && name !== wordFieldName) ||
+        null;
+      const exampleFieldName = roleMap.example || null;
+      const maskedFieldName = roleMap.masked || null;
+
+      assignPrimaryEditor(frontField, frontFieldLabel, DEFAULT_FIELD_LABELS.front, wordFieldName);
+      assignPrimaryEditor(backField, backFieldLabel, DEFAULT_FIELD_LABELS.back, definitionFieldName);
+
+      if (exampleFieldWrapper) {
+        exampleFieldWrapper.hidden = !exampleFieldName;
+      }
+      assignPrimaryEditor(
+        exampleField,
+        exampleFieldLabel,
+        DEFAULT_FIELD_LABELS.example,
+        exampleFieldName
+      );
+      if (!exampleFieldName && exampleField) {
+        exampleField.value = "";
+      }
+
+      if (additionalFieldsContainer) {
+        normalizedFieldNames.forEach((fieldName) => {
+          if (!fieldName || assignedFields.has(fieldName)) {
+            return;
+          }
+
+          const wrapper = document.createElement("div");
+          wrapper.className = "additional-field";
+
+          const label = document.createElement("label");
+          const editorId = createFieldEditorId(fieldName);
+          label.htmlFor = editorId;
+          label.textContent = fieldName;
+
+          const textarea = document.createElement("textarea");
+          textarea.id = editorId;
+          textarea.dataset.fieldName = fieldName;
+          textarea.value = preservedValues.get(fieldName) ?? "";
+          if (fieldName === maskedFieldName) {
+            textarea.readOnly = true;
+          }
+
+          wrapper.appendChild(label);
+          wrapper.appendChild(textarea);
+          additionalFieldsContainer.appendChild(wrapper);
+
+          fieldEditors.set(fieldName, textarea);
+          additionalFieldEditors.set(fieldName, { element: textarea, label, wrapper });
+        });
+
+        additionalFieldsContainer.hidden = additionalFieldEditors.size === 0;
+      }
+
+      if (maskedFieldName) {
+        const maskedEditor = fieldEditors.get(maskedFieldName);
+        if (maskedEditor) {
+          maskedEditor.readOnly = true;
+        }
+      }
+
+      activeModelFieldMetadata = {
+        modelName,
+        orderedFieldNames: normalizedFieldNames,
+        roleMap: {
+          word: wordFieldName,
+          definition: definitionFieldName,
+          example: exampleFieldName,
+          masked: maskedFieldName,
+        },
+      };
+
+      if (modelName && normalizedFieldNames.length) {
+        modelFieldCache.set(modelName, {
+          orderedFieldNames: normalizedFieldNames,
+          roleMap: activeModelFieldMetadata.roleMap,
+        });
+      }
+
+      updatePreview();
+      refreshMaskedWordField();
+    }
+
+    async function ensureModelFieldMetadata(modelName) {
+      if (!modelName) {
+        return { orderedFieldNames: [], roleMap: {} };
+      }
+
+      const cached = modelFieldCache.get(modelName);
+      if (cached && Array.isArray(cached.orderedFieldNames) && cached.orderedFieldNames.length) {
+        return cached;
+      }
+
+      if (pendingModelFieldRequests.has(modelName)) {
+        return pendingModelFieldRequests.get(modelName);
+      }
+
+      const requestPromise = (async () => {
+        let orderedFieldNames = [];
+
+        try {
+          const fieldConfig = await callAnkiConnect("modelFieldNamesAndConfig", { modelName });
+          if (fieldConfig && Array.isArray(fieldConfig.fields)) {
+            orderedFieldNames = fieldConfig.fields
+              .slice()
+              .sort((a, b) => (a?.ord ?? 0) - (b?.ord ?? 0))
+              .map((field) => field.name)
+              .filter(Boolean);
+          }
+        } catch (error) {
+          console.warn(`modelFieldNamesAndConfig failed for "${modelName}"`, error);
+        }
+
+        if (!orderedFieldNames.length) {
+          const fallbackNames = await callAnkiConnect("modelFieldNames", { modelName });
+          if (Array.isArray(fallbackNames)) {
+            orderedFieldNames = fallbackNames.filter(Boolean);
+          }
+        }
+
+        if (!orderedFieldNames.length) {
+          throw new Error(`No fields available for "${modelName}".`);
+        }
+
+        const metadata = {
+          orderedFieldNames,
+          roleMap: computeFieldRoleMap(orderedFieldNames),
+        };
+
+        modelFieldCache.set(modelName, metadata);
+        return metadata;
+      })();
+
+      pendingModelFieldRequests.set(modelName, requestPromise);
+
+      try {
+        return await requestPromise;
+      } finally {
+        pendingModelFieldRequests.delete(modelName);
+      }
+    }
+
+    async function refreshModelFieldsForCurrentModel({ modelName } = {}) {
+      const resolvedModelName = modelName || modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
+      const requestId = ++modelFieldLoadToken;
+
+      try {
+        const metadata = await ensureModelFieldMetadata(resolvedModelName);
+        if (requestId !== modelFieldLoadToken) {
+          return metadata;
+        }
+
+        applyModelFieldMetadata(
+          resolvedModelName,
+          metadata.orderedFieldNames,
+          metadata.roleMap
+        );
+
+        return metadata;
+      } catch (error) {
+        if (requestId !== modelFieldLoadToken) {
+          return null;
+        }
+
+        console.warn(`Failed to load field metadata for "${resolvedModelName}"`, error);
+        applyModelFieldMetadata(resolvedModelName, [], null);
+        return null;
+      }
     }
 
     function createNoteDetails(note, deckName) {
@@ -2013,45 +2479,48 @@
         return null;
       }
 
-      const fieldEntries = Object.entries(note.fields);
+      const fieldEntries = Object.entries(note.fields)
+        .map(([name, payload], index) => ({
+          name,
+          value:
+            payload && typeof payload.value === "string" ? payload.value : "",
+          order: typeof payload?.order === "number" ? payload.order : index,
+        }))
+        .filter((entry) => entry.name);
+
       if (!fieldEntries.length) {
         return null;
       }
 
-      const frontEntry =
-        selectFieldEntry(fieldEntries, ["front"]) || selectFieldEntry(fieldEntries, [], 0);
-      const backEntry =
-        selectFieldEntry(fieldEntries, ["back"], 1) || selectFieldEntry(fieldEntries, [], 0);
-      const exampleEntry = selectFieldEntry(fieldEntries, ["example"]);
+      fieldEntries.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-      const getValue = (entry) =>
-        entry && entry[1] && typeof entry[1].value === "string" ? entry[1].value : "";
+      const orderedFields = fieldEntries.map((entry) => ({ ...entry }));
+      const fields = {};
+      orderedFields.forEach((entry) => {
+        fields[entry.name] = entry.value;
+      });
 
-      const frontHtml = getValue(frontEntry);
-      const backHtml = getValue(backEntry);
-      const exampleHtml = getValue(exampleEntry);
+      const fieldNames = orderedFields.map((entry) => entry.name);
+      const roleMap = computeFieldRoleMap(fieldNames);
 
-      return {
+      const noteDetails = {
         id: note.noteId,
         deckName,
         modelName: note.modelName || "",
         tags: Array.isArray(note.tags) ? note.tags : [],
-        fieldMap: {
-          front: frontEntry ? frontEntry[0] : null,
-          back: backEntry ? backEntry[0] : null,
-          example: exampleEntry ? exampleEntry[0] : null,
-        },
-        fields: {
-          frontHtml,
-          backHtml,
-          exampleHtml,
-        },
+        orderedFields,
+        fields,
+        roleMap,
         display: {
-          frontText: stripHtml(frontHtml),
-          backText: stripHtml(backHtml),
-          exampleText: stripHtml(exampleHtml),
+          frontText: "",
+          backText: "",
+          exampleText: "",
         },
       };
+
+      updateNoteDetailsDisplay(noteDetails);
+
+      return noteDetails;
     }
 
     function mapDeckNotesToEntries(notesInfo, deckName, term) {
@@ -2156,9 +2625,57 @@
         return;
       }
 
-      frontField.value = noteDetails.fields.frontHtml || "";
-      backField.value = noteDetails.fields.backHtml || "";
-      exampleField.value = noteDetails.fields.exampleHtml || "";
+      const modelName =
+        noteDetails.modelName || modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
+
+      if (modelName) {
+        modelNameInput.value = modelName;
+        userModifiedNoteType = false;
+      }
+
+      const fieldNames = Array.isArray(noteDetails.orderedFields)
+        ? noteDetails.orderedFields.map((field) => field.name)
+        : Object.keys(noteDetails.fields || {});
+
+      applyModelFieldMetadata(modelName, fieldNames, noteDetails.roleMap);
+
+      const fields = noteDetails.fields || {};
+      fieldEditors.forEach((editor, fieldName) => {
+        if (!editor) {
+          return;
+        }
+        editor.value = fields[fieldName] || "";
+      });
+
+      noteDetails.modelName = modelName;
+      noteDetails.roleMap = activeModelFieldMetadata.roleMap;
+
+      if (Array.isArray(noteDetails.orderedFields)) {
+        noteDetails.orderedFields.forEach((entry) => {
+          if (!entry || !entry.name) {
+            return;
+          }
+          const editor = fieldEditors.get(entry.name);
+          if (editor) {
+            entry.value = editor.value;
+            fields[entry.name] = editor.value;
+          }
+        });
+      }
+
+      refreshMaskedWordField();
+
+      const maskedFieldName = activeModelFieldMetadata.roleMap?.masked;
+      if (maskedFieldName) {
+        const maskedEditor = fieldEditors.get(maskedFieldName);
+        if (maskedEditor) {
+          fields[maskedFieldName] = maskedEditor.value;
+        }
+      }
+
+      noteDetails.fields = fields;
+
+      updateNoteDetailsDisplay(noteDetails);
 
       if (Array.isArray(noteDetails.tags)) {
         tagsInput.value = noteDetails.tags.join(", ");
@@ -2175,17 +2692,51 @@
       }
 
       const updateFields = {};
+      const processed = new Set();
 
-      if (noteDetails.fieldMap.front) {
-        updateFields[noteDetails.fieldMap.front] = frontField.value.trim();
+      const collectFieldValue = (fieldName) => {
+        if (!fieldName || processed.has(fieldName)) {
+          return;
+        }
+        const editor = fieldEditors.get(fieldName);
+        if (!editor) {
+          return;
+        }
+        updateFields[fieldName] = editor.value.trim();
+        processed.add(fieldName);
+      };
+
+      if (Array.isArray(noteDetails.orderedFields)) {
+        noteDetails.orderedFields.forEach((entry) => collectFieldValue(entry.name));
       }
 
-      if (noteDetails.fieldMap.back) {
-        updateFields[noteDetails.fieldMap.back] = backField.value.trim();
-      }
+      fieldEditors.forEach((_, fieldName) => collectFieldValue(fieldName));
 
-      if (noteDetails.fieldMap.example) {
-        updateFields[noteDetails.fieldMap.example] = exampleField.value.trim();
+      const roleMap = noteDetails.roleMap || activeModelFieldMetadata.roleMap || {};
+      const wordFieldName =
+        roleMap.word ||
+        (Array.isArray(noteDetails.orderedFields) && noteDetails.orderedFields.length
+          ? noteDetails.orderedFields[0].name
+          : getActiveWordFieldName());
+      const maskedFieldName = roleMap.masked || activeModelFieldMetadata.roleMap?.masked;
+
+      if (wordFieldName) {
+        const wordEditor = fieldEditors.get(wordFieldName);
+        const existingWordValue =
+          typeof (noteDetails.fields || {})[wordFieldName] === "string"
+            ? noteDetails.fields[wordFieldName].trim()
+            : "";
+        const wordValue = wordEditor ? wordEditor.value.trim() : existingWordValue;
+        updateFields[wordFieldName] = wordValue;
+
+        if (maskedFieldName) {
+          const maskedValue = deriveMaskedWordValue(wordValue);
+          updateFields[maskedFieldName] = maskedValue;
+          const maskedEditor = fieldEditors.get(maskedFieldName);
+          if (maskedEditor) {
+            maskedEditor.value = maskedValue;
+          }
+        }
       }
 
       const fieldNames = Object.keys(updateFields);
@@ -2199,6 +2750,31 @@
           fields: updateFields,
         },
       });
+
+      const fields = noteDetails.fields || {};
+      fieldNames.forEach((fieldName) => {
+        fields[fieldName] = updateFields[fieldName];
+      });
+      noteDetails.fields = fields;
+      noteDetails.roleMap = roleMap;
+
+      if (Array.isArray(noteDetails.orderedFields)) {
+        fieldNames.forEach((fieldName) => {
+          const existing = noteDetails.orderedFields.find((entry) => entry && entry.name === fieldName);
+          if (existing) {
+            existing.value = updateFields[fieldName];
+          } else {
+            noteDetails.orderedFields.push({
+              name: fieldName,
+              value: updateFields[fieldName],
+              order: noteDetails.orderedFields.length,
+            });
+          }
+        });
+      }
+
+      updateNoteDetailsDisplay(noteDetails);
+      refreshMaskedWordField();
     }
 
     function createMaskFromMatch(match) {
@@ -2348,6 +2924,10 @@
           userModifiedNoteType = false;
         }
 
+        await refreshModelFieldsForCurrentModel({
+          modelName: modelNameInput.value.trim() || DEFAULT_MODEL_NAME,
+        });
+
         setStatus(statusMessage, "success");
       } catch (error) {
         if (pendingNoteTypeDeck !== deckName) {
@@ -2395,6 +2975,7 @@
           }
         }
         updateModelSuggestions([]);
+        await refreshModelFieldsForCurrentModel();
         setStatus("Decks loaded", "success");
         updatePreview();
       } catch (error) {
@@ -2505,21 +3086,9 @@
             setStatus("Updating existing card…");
             updateButton.disabled = true;
             await updateExistingNoteFromEditor(entry.noteDetails);
-            if (entry.noteDetails.fieldMap.front) {
-              entry.noteDetails.fields.frontHtml = frontField.value.trim();
-              entry.noteDetails.display.frontText = stripHtml(
-                entry.noteDetails.fields.frontHtml
-              );
-              if (entry.noteDetails.display.frontText) {
-                entry.word = entry.noteDetails.display.frontText;
-                headword.textContent = entry.word;
-              }
-            }
-            if (entry.noteDetails.fieldMap.back) {
-              entry.noteDetails.fields.backHtml = backField.value.trim();
-            }
-            if (entry.noteDetails.fieldMap.example) {
-              entry.noteDetails.fields.exampleHtml = exampleField.value.trim();
+            if (entry.noteDetails.display?.frontText) {
+              entry.word = entry.noteDetails.display.frontText;
+              headword.textContent = entry.word;
             }
             setStatus("Existing card updated.", "success");
           } catch (error) {
@@ -2978,32 +3547,101 @@
     async function addCard() {
       const deckName = deckSelect.value;
       const modelName = modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
-      const front = frontField.value.trim();
-      const back = backField.value.trim();
 
       if (!deckName) {
         setStatus("Please choose a deck", "error");
         return;
       }
 
-      if (!front || !back) {
-        setStatus("Front and back cannot be empty", "error");
-        return;
-      }
-
       setStatus("Adding card to deck…");
       addCardBtn.disabled = true;
 
-      const example = exampleField.value.trim();
+      refreshMaskedWordField();
+
       const tags = tagsInput.value
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean);
 
-      const fields = {
-        Front: front,
-        Back: example ? `${back}\n\n<em>${example}</em>` : back,
-      };
+      let metadata = modelFieldCache.get(modelName);
+      try {
+        if (!metadata || !metadata.orderedFieldNames?.length) {
+          metadata = await ensureModelFieldMetadata(modelName);
+        }
+      } catch (metadataError) {
+        console.error(metadataError);
+        setStatus(
+          metadataError.message || `Failed to load fields for "${modelName}"`,
+          "error"
+        );
+        addCardBtn.disabled = false;
+        return;
+      }
+
+      const orderedFieldNames = Array.isArray(metadata?.orderedFieldNames)
+        ? metadata.orderedFieldNames
+        : [];
+
+      if (!orderedFieldNames.length) {
+        setStatus(`The note type "${modelName}" has no fields.`, "error");
+        addCardBtn.disabled = false;
+        return;
+      }
+
+      const fields = {};
+      orderedFieldNames.forEach((fieldName) => {
+        const editor = fieldEditors.get(fieldName);
+        fields[fieldName] = editor ? editor.value.trim() : "";
+      });
+
+      fieldEditors.forEach((editor, fieldName) => {
+        if (!(fieldName in fields)) {
+          fields[fieldName] = editor ? editor.value.trim() : "";
+        }
+      });
+
+      const roleMap = metadata?.roleMap || activeModelFieldMetadata.roleMap || {};
+      const wordFieldName =
+        roleMap.word ||
+        (orderedFieldNames.length ? orderedFieldNames[0] : getActiveWordFieldName());
+      const definitionFieldName =
+        roleMap.definition ||
+        orderedFieldNames.find((name) => name && name !== wordFieldName) ||
+        null;
+
+      const wordValue = wordFieldName ? (fields[wordFieldName] || "").trim() : "";
+      const definitionValue = definitionFieldName
+        ? (fields[definitionFieldName] || "").trim()
+        : "";
+
+      if (!wordValue) {
+        setStatus("Primary fields cannot be empty for this note type.", "error");
+        addCardBtn.disabled = false;
+        return;
+      }
+
+      if (definitionFieldName && !definitionValue) {
+        setStatus("Primary fields cannot be empty for this note type.", "error");
+        addCardBtn.disabled = false;
+        return;
+      }
+
+      if (wordFieldName) {
+        fields[wordFieldName] = wordValue;
+      }
+      if (definitionFieldName) {
+        fields[definitionFieldName] = definitionValue;
+      }
+
+      const maskedFieldName = roleMap.masked || activeModelFieldMetadata.roleMap?.masked;
+      if (maskedFieldName && wordFieldName) {
+        const maskedValue = deriveMaskedWordValue(wordValue);
+        fields[maskedFieldName] = maskedValue;
+        const maskedEditor = fieldEditors.get(maskedFieldName);
+        if (maskedEditor) {
+          maskedEditor.value = maskedValue;
+        }
+      }
 
       try {
         await callAnkiConnect("addNote", {
