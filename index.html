@@ -125,6 +125,51 @@
       color: #2f4075;
     }
 
+    .panel.notice {
+      background: rgba(63, 100, 199, 0.08);
+      border: 1px solid rgba(63, 100, 199, 0.2);
+    }
+
+    .panel.notice h2 {
+      color: #2f4075;
+    }
+
+    .panel.notice ol {
+      margin: 0.75rem 0 0;
+      padding-left: 1.2rem;
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .panel.notice code {
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 6px;
+      padding: 0.1rem 0.35rem;
+      font-size: 0.9rem;
+      color: #2a3d82;
+      box-shadow: inset 0 0 0 1px rgba(63, 100, 199, 0.15);
+    }
+
+    .panel.notice pre {
+      background: rgba(63, 100, 199, 0.12);
+      border-radius: 8px;
+      padding: 0.75rem;
+      overflow-x: auto;
+      font-size: 0.9rem;
+      color: #1e2a44;
+      box-shadow: inset 0 0 0 1px rgba(63, 100, 199, 0.1);
+    }
+
+    .panel.notice p.note {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: #4a5781;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
     .dictionary-controls {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto auto;
@@ -256,6 +301,34 @@
     </aside>
 
     <main class="main">
+      <section class="panel notice" id="connection-setup" aria-live="polite">
+        <h2>Allow this page to reach Anki</h2>
+        <p>
+          Follow these steps so <code>https://audiophrases.github.io</code> can talk to the
+          AnkiConnect add-on running on your computer:
+        </p>
+        <ol>
+          <li>Open Anki and install the <strong>AnkiConnect</strong> add-on if it is not already installed.</li>
+          <li>In Anki, choose <em>Tools → Add-ons → AnkiConnect → Config</em>.</li>
+          <li>
+            Add <code>https://audiophrases.github.io</code> to the <code>webCorsOriginList</code> array in the
+            configuration JSON (keep the existing values).
+          </li>
+          <li>Save the changes and restart Anki so the updated permissions are applied.</li>
+        </ol>
+        <p>If you prefer, the relevant portion of the configuration can look like:</p>
+        <pre><code>{
+  "webCorsOriginList": [
+    "http://localhost",
+    "https://audiophrases.github.io"
+  ]
+}</code></pre>
+        <p class="note">
+          Return to this page and press <strong>Load Decks</strong> to confirm the connection. Once AnkiConnect
+          replies successfully these instructions will be hidden. Running this page from
+          <code>http://localhost</code> also matches AnkiConnect's default CORS settings.
+        </p>
+      </section>
       <section class="panel" id="dictionary-panel">
         <h2>Dictionary Lookup</h2>
         <div class="dictionary-controls">
@@ -320,6 +393,7 @@
     const passwordInput = document.getElementById("anki-password");
     const modelNameInput = document.getElementById("model-name");
     const tagsInput = document.getElementById("tags");
+    const connectionNotice = document.getElementById("connection-setup");
 
     const previewDeck = document.getElementById("preview-deck");
     const previewModel = document.getElementById("preview-model");
@@ -331,7 +405,10 @@
     const SESSION_KEYS = {
       credentials: "anki.session.credentials",
       deck: "anki.session.deck",
+      connectionEstablished: "anki.session.connectionEstablished",
     };
+
+    let connectionReady = false;
 
     function safeParseJSON(value, fallback = null) {
       if (!value) {
@@ -394,6 +471,24 @@
       statusEl.className = "status" + (type ? " " + type : "");
     }
 
+    function markConnectionReady() {
+      if (connectionReady) {
+        return;
+      }
+      connectionReady = true;
+      setSessionItem(SESSION_KEYS.connectionEstablished, "true");
+      if (connectionNotice) {
+        connectionNotice.classList.add("hidden");
+      }
+    }
+
+    if (getSessionItem(SESSION_KEYS.connectionEstablished) === "true") {
+      connectionReady = true;
+      if (connectionNotice) {
+        connectionNotice.classList.add("hidden");
+      }
+    }
+
     const savedCredentials = safeParseJSON(getSessionItem(SESSION_KEYS.credentials), {});
     if (savedCredentials?.username) {
       usernameInput.value = savedCredentials.username;
@@ -441,6 +536,7 @@
       }
 
       const data = await response.json();
+      markConnectionReady();
       if (data.error) {
         throw new Error(data.error);
       }
@@ -1072,18 +1168,18 @@
           },
         });
 
-        const username = usernameInput.value.trim();
-        const password = passwordInput.value;
-        if (username && password) {
-          try {
-            await callAnkiConnect("sync", { ankiwebid: username, password });
-            setStatus("Card added and synced with AnkiWeb", "success");
-          } catch (syncError) {
-            console.warn("Sync failed", syncError);
-            setStatus(`Card added but sync failed: ${syncError.message}`, "error");
-          }
-        } else {
-          setStatus("Card added to Anki", "success");
+        try {
+          await callAnkiConnect("sync");
+          setStatus(
+            "Card added and sync requested using Anki's saved session.",
+            "success"
+          );
+        } catch (syncError) {
+          console.warn("Sync failed", syncError);
+          setStatus(
+            `Card added but sync failed via saved session: ${syncError.message}`,
+            "error"
+          );
         }
       } catch (error) {
         console.error(error);
