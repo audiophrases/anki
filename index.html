@@ -1072,18 +1072,18 @@
           },
         });
 
-        const username = usernameInput.value.trim();
-        const password = passwordInput.value;
-        if (username && password) {
-          try {
-            await callAnkiConnect("sync", { ankiwebid: username, password });
-            setStatus("Card added and synced with AnkiWeb", "success");
-          } catch (syncError) {
-            console.warn("Sync failed", syncError);
-            setStatus(`Card added but sync failed: ${syncError.message}`, "error");
-          }
-        } else {
-          setStatus("Card added to Anki", "success");
+        try {
+          await callAnkiConnect("sync");
+          setStatus(
+            "Card added and sync requested using Anki's saved session.",
+            "success"
+          );
+        } catch (syncError) {
+          console.warn("Sync failed", syncError);
+          setStatus(
+            `Card added but sync failed via saved session: ${syncError.message}`,
+            "error"
+          );
         }
       } catch (error) {
         console.error(error);
