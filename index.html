@@ -3382,22 +3382,58 @@
           ? fetchSpellingSuggestions(parsedTerm.term)
           : Promise.resolve([]);
 
-        const deckLookupPromise = shouldSearchDecks
+        suggestionsPromise
+          .then((suggestions) => {
+            renderSpellingSuggestionsList(suggestions, parsedTerm);
+          })
+          .catch(() => {
+            renderSpellingSuggestionsList([], parsedTerm);
+          });
+
+        const defaultDeckSummary = {
+          deckName: deckSelect.value || "",
+          entries: [],
+          totalCount: 0,
+          shownCount: 0,
+          truncated: false,
+          error: "",
+        };
+
+        let deckLookupSummary = defaultDeckSummary;
+
+        let deckLookupPromise = (shouldSearchDecks
           ? findDeckEntries(parsedTerm.term, deckSelect.value)
-          : Promise.resolve({
+          : Promise.resolve(defaultDeckSummary))
+          .then((summary) => {
+            deckLookupSummary = summary;
+            if (Array.isArray(summary.entries) && summary.entries.length) {
+              addEntries(summary.entries, summary.deckName || "Existing cards", {
+                prepend: true,
+                trackProvider: false,
+              });
+            }
+            renderDictionaryResults(collectedEntries, parsedTerm);
+            return summary;
+          })
+          .catch((error) => {
+            console.warn("Deck lookup failed", error);
+            deckLookupSummary = {
               deckName: deckSelect.value || "",
               entries: [],
               totalCount: 0,
               shownCount: 0,
               truncated: false,
-              error: "",
-            });
+              error: error?.message || "Deck lookup failed.",
+            };
+            renderDictionaryResults(collectedEntries, parsedTerm);
+            return deckLookupSummary;
+          });
 
-        const providerResponses = await Promise.all(
-          providerIds.map(async (providerId) => {
+        const providerTasks = providerIds.map((providerId) => {
+          const lookupPromise = (async () => {
             const provider = dictionaryProviders[providerId];
             if (!provider) {
-              return { providerId, entries: [], embeddedCount: 0, skipped: false };
+              return { providerId, entries: [], embeddedCount: 0 };
             }
 
             const credentials = getProviderCredentials(provider.id);
@@ -3408,7 +3444,7 @@
               const missingKeys = requiredKeys.filter((key) => !credentials[key]);
               if (missingKeys.length) {
                 missingCredentials.push(provider.label || providerId);
-                return { providerId, entries: [], embeddedCount: 0, skipped: true };
+                return { providerId, entries: [], embeddedCount: 0 };
               }
             }
 
@@ -3450,92 +3486,100 @@
               .filter(Boolean);
 
             return { providerId, entries: filteredEntries, embeddedCount: providerEmbeddedCount };
-          })
-        );
+          })();
 
-        const deckLookupSummary = await deckLookupPromise;
-        const suggestions = await suggestionsPromise.catch(() => []);
-        renderSpellingSuggestionsList(suggestions, parsedTerm);
-
-        providerResponses.forEach(({ providerId, entries, embeddedCount }) => {
-          embeddedMatchCount += embeddedCount;
-          const providerLabel = dictionaryProviders[providerId]?.label || providerId;
-          addEntries(entries, providerLabel);
+          return lookupPromise
+            .then((result) => {
+              embeddedMatchCount += result.embeddedCount;
+              const providerLabel = dictionaryProviders[result.providerId]?.label || result.providerId;
+              addEntries(result.entries, providerLabel);
+              renderDictionaryResults(collectedEntries, parsedTerm);
+              return result;
+            })
+            .catch((error) => {
+              console.error(`Lookup failed for ${providerId}`, error);
+              providerErrors.push(
+                `${dictionaryProviders[providerId]?.label || providerId}: ${error?.message || "Unknown error"}`
+              );
+              renderDictionaryResults(collectedEntries, parsedTerm);
+              return { providerId, entries: [], embeddedCount: 0 };
+            });
         });
 
-        if (deckLookupSummary.entries.length) {
-          addEntries(deckLookupSummary.entries, deckLookupSummary.deckName || "Existing cards", {
-            prepend: true,
-            trackProvider: false,
-          });
-        }
-
-        if (!collectedEntries.length) {
-          renderDictionaryResults([], parsedTerm);
-          let emptyMessage = "No entries available.";
-          if (deckLookupSummary.deckName && deckLookupSummary.error) {
-            emptyMessage += ` Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`;
-          }
-          if (missingCredentials.length) {
-            emptyMessage += ` Skipped ${missingCredentials.join(", ")} (missing credentials).`;
-          }
-          setStatus(emptyMessage, "error");
-          return;
-        }
-
-        renderDictionaryResults(collectedEntries, parsedTerm);
-
-        const statusParts = [];
-
-        if (shouldSearchOnline) {
-          const providerList = Array.from(contributingProviders);
-          let providerSummary;
-          if (!providerIds.length) {
-            providerSummary = "no online dictionaries";
-          } else if (!providerList.length) {
-            providerSummary = providerIds.length === 1
-              ? dictionaryProviders[providerIds[0]]?.label || providerIds[0]
-              : "selected dictionaries";
-          } else if (providerList.length === 1) {
-            providerSummary = providerList[0];
-          } else {
-            providerSummary = `${providerList.length} dictionaries (${providerList.join(", ")})`;
-          }
-          const embeddedNote = embeddedMatchCount
-            ? ` including ${embeddedMatchCount} embedded match${embeddedMatchCount === 1 ? "" : "es"}`
-            : "";
-          statusParts.push(`Dictionary results loaded from ${providerSummary}${embeddedNote}.`);
-        }
-
-        if (shouldSearchDecks && deckLookupSummary.deckName) {
-          if (deckLookupSummary.error) {
-            statusParts.push(
-              `Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`
-            );
-          } else if (deckLookupSummary.totalCount > 0) {
-            let deckMessage = `Found ${deckLookupSummary.totalCount} existing card${
-              deckLookupSummary.totalCount === 1 ? "" : "s"
-            } in "${deckLookupSummary.deckName}"`;
-            if (deckLookupSummary.truncated && deckLookupSummary.shownCount) {
-              deckMessage += ` (showing first ${deckLookupSummary.shownCount})`;
+        const finalizeSearch = () => {
+          if (!collectedEntries.length) {
+            renderDictionaryResults([], parsedTerm);
+            let emptyMessage = "No entries available.";
+            if (deckLookupSummary.deckName && deckLookupSummary.error) {
+              emptyMessage += ` Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`;
             }
-            deckMessage += ".";
-            statusParts.push(deckMessage);
-          } else {
-            statusParts.push(`No existing cards matched in "${deckLookupSummary.deckName}".`);
+            if (missingCredentials.length) {
+              emptyMessage += ` Skipped ${missingCredentials.join(", ")} (missing credentials).`;
+            }
+            setStatus(emptyMessage, "error");
+            return;
           }
-        }
 
-        if (missingCredentials.length) {
-          statusParts.push(`Skipped ${missingCredentials.join(", ")} (missing credentials).`);
-        }
+          renderDictionaryResults(collectedEntries, parsedTerm);
 
-        if (providerErrors.length) {
-          statusParts.push(`Dictionary errors: ${providerErrors.join("; ")}.`);
-        }
+          const statusParts = [];
 
-        const statusType = deckLookupSummary.error || providerErrors.length ? "error" : "success";
-        setStatus(statusParts.join(" "), statusType);
+          if (shouldSearchOnline) {
+            const providerList = Array.from(contributingProviders);
+            let providerSummary;
+            if (!providerIds.length) {
+              providerSummary = "no online dictionaries";
+            } else if (!providerList.length) {
+              providerSummary =
+                providerIds.length === 1
+                  ? dictionaryProviders[providerIds[0]]?.label || providerIds[0]
+                  : "selected dictionaries";
+            } else if (providerList.length === 1) {
+              providerSummary = providerList[0];
+            } else {
+              providerSummary = `${providerList.length} dictionaries (${providerList.join(", ")})`;
+            }
+            const embeddedNote = embeddedMatchCount
+              ? ` including ${embeddedMatchCount} embedded match${embeddedMatchCount === 1 ? "" : "es"}`
+              : "";
+            statusParts.push(`Dictionary results loaded from ${providerSummary}${embeddedNote}.`);
+          }
+
+          if (shouldSearchDecks && deckLookupSummary.deckName) {
+            if (deckLookupSummary.error) {
+              statusParts.push(
+                `Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`
+              );
+            } else if (deckLookupSummary.totalCount > 0) {
+              let deckMessage = `Found ${deckLookupSummary.totalCount} existing card${
+                deckLookupSummary.totalCount === 1 ? "" : "s"
+              } in "${deckLookupSummary.deckName}"`;
+              if (deckLookupSummary.truncated && deckLookupSummary.shownCount) {
+                deckMessage += ` (showing first ${deckLookupSummary.shownCount})`;
+              }
+              deckMessage += ".";
+              statusParts.push(deckMessage);
+            } else {
+              statusParts.push(`No existing cards matched in "${deckLookupSummary.deckName}".`);
+            }
+          }
+
+          if (missingCredentials.length) {
+            statusParts.push(`Skipped ${missingCredentials.join(", ")} (missing credentials).`);
+          }
+
+          if (providerErrors.length) {
+            statusParts.push(`Dictionary errors: ${providerErrors.join("; ")}.`);
+          }
+
+          const statusType = deckLookupSummary.error || providerErrors.length ? "error" : "success";
+          setStatus(statusParts.join(" "), statusType);
+        };
+
+        const streamingCompletion = Promise.allSettled([...providerTasks, deckLookupPromise]);
+        await streamingCompletion;
+
+        finalizeSearch();
       } catch (error) {
         console.error(error);
         dictionaryResults.textContent = "No entries available.";
