@@ -336,6 +336,12 @@
           This notice hides automatically after AnkiConnect responds
           successfully.
         </p>
+        <p class="setup-footnote">
+          Ensure your AnkiConnect configuration allows the
+          <code>findNotes</code>, <code>notesInfo</code>, and
+          <code>updateNoteFields</code> actions so this tool can surface and
+          refresh existing cards within your decks.
+        </p>
       </section>
 
       <section class="panel" id="dictionary-panel">
@@ -421,6 +427,9 @@
     const DEFAULT_MODEL_NAME = "Basic";
     const NOTE_SAMPLE_BATCH_SIZE = 200;
     const NOTE_SAMPLE_BATCH_LIMIT = 5;
+    const NOTE_SEARCH_LIMIT = 25;
+
+    const htmlParser = document.createElement("div");
 
     let userModifiedNoteType = false;
     let pendingNoteTypeDeck = "";
@@ -888,6 +897,229 @@
       return deckName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     }
 
+    function escapeSearchTerm(term) {
+      if (!term) {
+        return "";
+      }
+
+      return term.replace(/"/g, '\\"').trim();
+    }
+
+    function stripHtml(value) {
+      if (!value) {
+        return "";
+      }
+
+      htmlParser.innerHTML = value;
+      const text = htmlParser.textContent || htmlParser.innerText || "";
+      htmlParser.textContent = "";
+      return text.trim();
+    }
+
+    function selectFieldEntry(fieldEntries, preferredNames = [], fallbackIndex = 0) {
+      const normalizedPreferences = preferredNames.map((name) => name.toLowerCase());
+      for (const [fieldName, payload] of fieldEntries) {
+        if (normalizedPreferences.includes(fieldName.toLowerCase())) {
+          return [fieldName, payload];
+        }
+      }
+
+      return fieldEntries[fallbackIndex] || null;
+    }
+
+    function createNoteDetails(note, deckName) {
+      if (!note || !note.noteId || !note.fields) {
+        return null;
+      }
+
+      const fieldEntries = Object.entries(note.fields);
+      if (!fieldEntries.length) {
+        return null;
+      }
+
+      const frontEntry =
+        selectFieldEntry(fieldEntries, ["front"]) || selectFieldEntry(fieldEntries, [], 0);
+      const backEntry =
+        selectFieldEntry(fieldEntries, ["back"], 1) || selectFieldEntry(fieldEntries, [], 0);
+      const exampleEntry = selectFieldEntry(fieldEntries, ["example"]);
+
+      const getValue = (entry) =>
+        entry && entry[1] && typeof entry[1].value === "string" ? entry[1].value : "";
+
+      const frontHtml = getValue(frontEntry);
+      const backHtml = getValue(backEntry);
+      const exampleHtml = getValue(exampleEntry);
+
+      return {
+        id: note.noteId,
+        deckName,
+        modelName: note.modelName || "",
+        tags: Array.isArray(note.tags) ? note.tags : [],
+        fieldMap: {
+          front: frontEntry ? frontEntry[0] : null,
+          back: backEntry ? backEntry[0] : null,
+          example: exampleEntry ? exampleEntry[0] : null,
+        },
+        fields: {
+          frontHtml,
+          backHtml,
+          exampleHtml,
+        },
+        display: {
+          frontText: stripHtml(frontHtml),
+          backText: stripHtml(backHtml),
+          exampleText: stripHtml(exampleHtml),
+        },
+      };
+    }
+
+    function mapDeckNotesToEntries(notesInfo, deckName, term) {
+      if (!Array.isArray(notesInfo)) {
+        return [];
+      }
+
+      return notesInfo
+        .map((note) => {
+          const noteDetails = createNoteDetails(note, deckName);
+          if (!noteDetails) {
+            return null;
+          }
+
+          const definitionText = noteDetails.display.backText || "(Back field is empty)";
+
+          return {
+            uniqueKey: `note-${noteDetails.id}`,
+            word: noteDetails.display.frontText || term,
+            source: deckName,
+            deckName,
+            isExistingNote: true,
+            noteDetails,
+            meanings: [
+              {
+                partOfSpeech: noteDetails.modelName || "Card content",
+                definitions: [
+                  {
+                    definition: definitionText,
+                    example: noteDetails.display.exampleText || "",
+                  },
+                ],
+              },
+            ],
+            note: `Saved note #${noteDetails.id} in "${deckName}"`,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    async function findDeckEntries(term, deckName) {
+      if (!deckName) {
+        return {
+          deckName: "",
+          entries: [],
+          totalCount: 0,
+          shownCount: 0,
+          truncated: false,
+          error: "",
+        };
+      }
+
+      const sanitizedDeckName = escapeDeckNameForQuery(deckName);
+      const sanitizedTerm = escapeSearchTerm(term);
+      const queryParts = [`deck:"${sanitizedDeckName}"`];
+      if (sanitizedTerm) {
+        queryParts.push(`"${sanitizedTerm}"`);
+      }
+
+      const query = queryParts.join(" ");
+
+      try {
+        const noteIds = await callAnkiConnect("findNotes", { query });
+        if (!Array.isArray(noteIds) || !noteIds.length) {
+          return {
+            deckName,
+            entries: [],
+            totalCount: 0,
+            shownCount: 0,
+            truncated: false,
+            error: "",
+          };
+        }
+
+        const limitedNoteIds = noteIds.slice(0, NOTE_SEARCH_LIMIT);
+        const notesInfo = await callAnkiConnect("notesInfo", { notes: limitedNoteIds });
+        const entries = mapDeckNotesToEntries(notesInfo, deckName, sanitizedTerm || term);
+
+        return {
+          deckName,
+          entries,
+          totalCount: noteIds.length,
+          shownCount: entries.length,
+          truncated: noteIds.length > limitedNoteIds.length,
+          error: "",
+        };
+      } catch (error) {
+        console.warn(`Deck lookup failed for "${deckName}"`, error);
+        return {
+          deckName,
+          entries: [],
+          totalCount: 0,
+          shownCount: 0,
+          truncated: false,
+          error: error?.message || "Deck lookup failed.",
+        };
+      }
+    }
+
+    function applyNoteToEditor(noteDetails) {
+      if (!noteDetails) {
+        return;
+      }
+
+      frontField.value = noteDetails.fields.frontHtml || "";
+      backField.value = noteDetails.fields.backHtml || "";
+      exampleField.value = noteDetails.fields.exampleHtml || "";
+
+      if (Array.isArray(noteDetails.tags)) {
+        tagsInput.value = noteDetails.tags.join(", ");
+      } else {
+        tagsInput.value = "";
+      }
+
+      updatePreview();
+    }
+
+    async function updateExistingNoteFromEditor(noteDetails) {
+      if (!noteDetails || !noteDetails.id) {
+        throw new Error("This note cannot be updated.");
+      }
+
+      const updateFields = {};
+
+      if (noteDetails.fieldMap.front) {
+        updateFields[noteDetails.fieldMap.front] = frontField.value.trim();
+      }
+
+      if (noteDetails.fieldMap.back) {
+        updateFields[noteDetails.fieldMap.back] = backField.value.trim();
+      }
+
+      if (noteDetails.fieldMap.example) {
+        updateFields[noteDetails.fieldMap.example] = exampleField.value.trim();
+      }
+
+      const fieldNames = Object.keys(updateFields);
+      if (!fieldNames.length) {
+        throw new Error("No mapped fields available for update.");
+      }
+
+      await callAnkiConnect("updateNoteFields", {
+        note: {
+          id: noteDetails.id,
+          fields: updateFields,
+        },
+      });
+    }
+
     function createMaskFromMatch(match) {
       if (!match) {
         return match;
@@ -1096,8 +1328,9 @@
       const card = document.createElement("div");
       card.className = "definition-card";
 
+      let headword = null;
       if (entry.word) {
-        const headword = document.createElement("h3");
+        headword = document.createElement("h3");
         headword.style.margin = "0 0 0.35rem 0";
         headword.style.fontSize = "1.05rem";
         headword.textContent = entry.word;
@@ -1110,34 +1343,126 @@
       badgeGroup.style.flexWrap = "wrap";
       badgeGroup.style.gap = "0.4rem";
       badgeGroup.style.alignItems = "center";
+
+      if (entry.isExistingNote) {
+        const existingBadge = document.createElement("span");
+        existingBadge.className = "badge";
+        existingBadge.textContent = "Existing card";
+        badgeGroup.appendChild(existingBadge);
+      }
+
       if (entry.source) {
         const sourceBadge = document.createElement("span");
         sourceBadge.className = "badge secondary";
         sourceBadge.textContent = entry.source;
         badgeGroup.appendChild(sourceBadge);
       }
+
       const partOfSpeech = document.createElement("span");
       partOfSpeech.className = "badge";
       partOfSpeech.textContent = meaning.partOfSpeech || "Definition";
       badgeGroup.appendChild(partOfSpeech);
-      const button = document.createElement("button");
-      button.textContent = "Use this meaning";
-      button.addEventListener("click", () => {
-        const definitionText = meaning.definitions[definitionIndex]?.definition || "";
-        const exampleText = meaning.definitions[definitionIndex]?.example || "";
-        const lookupTerm = lookupTermInput.value.trim();
-        frontField.value = lookupTerm;
-        const maskedDefinition = maskTargetInText(definitionText, lookupTerm);
-        backField.value = maskedDefinition;
-        if (exampleText) {
-          exampleField.value = maskTargetInText(exampleText, lookupTerm);
-        }
-        updatePreview();
-        const sourceLabel = entry.source ? ` (${entry.source})` : "";
-        setStatus(`Definition inserted into the card editor${sourceLabel}`, "success");
-      });
+
       header.appendChild(badgeGroup);
-      header.appendChild(button);
+
+      if (entry.isExistingNote && entry.noteDetails) {
+        const buttonGroup = document.createElement("div");
+        buttonGroup.style.display = "flex";
+        buttonGroup.style.flexWrap = "wrap";
+        buttonGroup.style.gap = "0.5rem";
+
+        const loadButton = document.createElement("button");
+        loadButton.textContent = "Load this card";
+        loadButton.addEventListener("click", () => {
+          applyNoteToEditor(entry.noteDetails);
+          const deckLabel = entry.noteDetails.deckName
+            ? ` from "${entry.noteDetails.deckName}"`
+            : "";
+          setStatus(`Existing card loaded${deckLabel}.`, "success");
+        });
+
+        const updateButton = document.createElement("button");
+        updateButton.textContent = "Update card";
+        updateButton.addEventListener("click", async () => {
+          try {
+            setStatus("Updating existing card…");
+            updateButton.disabled = true;
+            await updateExistingNoteFromEditor(entry.noteDetails);
+            if (entry.noteDetails.fieldMap.front) {
+              entry.noteDetails.fields.frontHtml = frontField.value.trim();
+              entry.noteDetails.display.frontText = stripHtml(
+                entry.noteDetails.fields.frontHtml
+              );
+              if (entry.noteDetails.display.frontText) {
+                entry.word = entry.noteDetails.display.frontText;
+                if (headword) {
+                  headword.textContent = entry.noteDetails.display.frontText;
+                }
+              }
+            }
+            if (entry.noteDetails.fieldMap.back) {
+              entry.noteDetails.fields.backHtml = backField.value.trim();
+              entry.noteDetails.display.backText = stripHtml(
+                entry.noteDetails.fields.backHtml
+              );
+              if (meaning.definitions[definitionIndex]) {
+                meaning.definitions[definitionIndex].definition =
+                  entry.noteDetails.display.backText || "";
+              }
+            }
+            if (entry.noteDetails.fieldMap.example) {
+              entry.noteDetails.fields.exampleHtml = exampleField.value.trim();
+              entry.noteDetails.display.exampleText = stripHtml(
+                entry.noteDetails.fields.exampleHtml
+              );
+              if (meaning.definitions[definitionIndex]) {
+                meaning.definitions[definitionIndex].example =
+                  entry.noteDetails.display.exampleText || "";
+              }
+            }
+            if (definitionText) {
+              definitionText.textContent =
+                meaning.definitions[definitionIndex]?.definition || "";
+            }
+            if (exampleParaRef) {
+              exampleParaRef.textContent =
+                meaning.definitions[definitionIndex]?.example || "";
+            }
+            updatePreview();
+            const deckLabel = entry.noteDetails.deckName
+              ? ` in "${entry.noteDetails.deckName}"`
+              : "";
+            setStatus(`Existing card updated${deckLabel}.`, "success");
+          } catch (error) {
+            setStatus(error.message || "Failed to update card", "error");
+          } finally {
+            updateButton.disabled = false;
+          }
+        });
+
+        buttonGroup.appendChild(loadButton);
+        buttonGroup.appendChild(updateButton);
+        header.appendChild(buttonGroup);
+      } else {
+        const button = document.createElement("button");
+        button.textContent = "Use this meaning";
+        button.addEventListener("click", () => {
+          const definitionText = meaning.definitions[definitionIndex]?.definition || "";
+          const exampleText = meaning.definitions[definitionIndex]?.example || "";
+          const lookupTerm = lookupTermInput.value.trim();
+          frontField.value = lookupTerm;
+          const maskedDefinition = maskTargetInText(definitionText, lookupTerm);
+          backField.value = maskedDefinition;
+          if (exampleText) {
+            exampleField.value = maskTargetInText(exampleText, lookupTerm);
+          }
+          updatePreview();
+          const sourceLabel = entry.source ? ` (${entry.source})` : "";
+          setStatus(`Definition inserted into the card editor${sourceLabel}`, "success");
+        });
+        header.appendChild(button);
+      }
+
       card.appendChild(header);
 
       if (entry.note) {
@@ -1154,26 +1479,32 @@
       definitionText.textContent = meaning.definitions[definitionIndex]?.definition || "";
       card.appendChild(definitionText);
 
+      let exampleParaRef = null;
       const example = meaning.definitions[definitionIndex]?.example;
       if (example) {
         const examplePara = document.createElement("p");
         examplePara.className = "example-text";
         examplePara.textContent = example;
-        const exampleButton = document.createElement("button");
-        exampleButton.textContent = "Use this example";
-        exampleButton.addEventListener("click", () => {
-          const lookupTerm = lookupTermInput.value.trim();
-          exampleField.value = maskTargetInText(example, lookupTerm);
-          updatePreview();
-          setStatus("Example added to the card", "success");
-        });
+        if (entry.isExistingNote) {
+          exampleParaRef = examplePara;
+          card.appendChild(examplePara);
+        } else {
+          const exampleButton = document.createElement("button");
+          exampleButton.textContent = "Use this example";
+          exampleButton.addEventListener("click", () => {
+            const lookupTerm = lookupTermInput.value.trim();
+            exampleField.value = maskTargetInText(example, lookupTerm);
+            updatePreview();
+            setStatus("Example added to the card", "success");
+          });
 
-        const exampleWrapper = document.createElement("div");
-        exampleWrapper.style.display = "grid";
-        exampleWrapper.style.gap = "0.6rem";
-        exampleWrapper.appendChild(examplePara);
-        exampleWrapper.appendChild(exampleButton);
-        card.appendChild(exampleWrapper);
+          const exampleWrapper = document.createElement("div");
+          exampleWrapper.style.display = "grid";
+          exampleWrapper.style.gap = "0.6rem";
+          exampleWrapper.appendChild(examplePara);
+          exampleWrapper.appendChild(exampleButton);
+          card.appendChild(exampleWrapper);
+        }
       }
 
       if (entry.phonetic) {
@@ -1218,33 +1549,42 @@
       const contributingProviders = new Set();
       let embeddedMatchCount = 0;
 
-      const addEntries = (entries, providerLabel = "") => {
+      const addEntries = (entries, providerLabel = "", options = {}) => {
+        const { prepend = false, trackProvider = true } = options;
         if (!Array.isArray(entries)) {
           return;
         }
 
-        entries.forEach((entry) => {
+        const iterable = prepend ? [...entries].reverse() : entries;
+
+        iterable.forEach((entry) => {
           if (!entry || !Array.isArray(entry.meanings) || !entry.meanings.length) {
             return;
           }
 
-          const key = JSON.stringify({
-            source: entry.source || "",
-            word: entry.word || "",
-            meanings: entry.meanings.map((meaning) => ({
-              partOfSpeech: meaning.partOfSpeech || "",
-              definitions: (meaning.definitions || []).map((definition) => ({
-                definition: definition.definition || "",
-                example: definition.example || "",
-              })),
-            })),
-          });
+          const key = entry.uniqueKey
+            ? entry.uniqueKey
+            : JSON.stringify({
+                source: entry.source || "",
+                word: entry.word || "",
+                meanings: entry.meanings.map((meaning) => ({
+                  partOfSpeech: meaning.partOfSpeech || "",
+                  definitions: (meaning.definitions || []).map((definition) => ({
+                    definition: definition.definition || "",
+                    example: definition.example || "",
+                  })),
+                })),
+              });
 
           if (!uniqueEntryKeys.has(key)) {
             uniqueEntryKeys.add(key);
-            collectedEntries.push(entry);
+            if (prepend) {
+              collectedEntries.unshift(entry);
+            } else {
+              collectedEntries.push(entry);
+            }
             const contributorLabel = entry.source || providerLabel;
-            if (contributorLabel) {
+            if (trackProvider && contributorLabel) {
               contributingProviders.add(contributorLabel);
             }
           }
@@ -1253,39 +1593,44 @@
 
       try {
         const providerIds = Object.keys(dictionaryProviders);
-        const providerResponses = await Promise.all(
-          providerIds.map(async (providerId) => {
-            const provider = dictionaryProviders[providerId];
-            if (!provider) {
-              return { providerId, entries: [], embeddedCount: 0 };
-            }
+        const deckName = deckSelect.value;
 
-            const providerEntries = [];
-            let providerEmbeddedCount = 0;
-            const providerLabel = provider.label || providerId;
-
-            try {
-              const directEntries = await provider.fetchEntries(term);
-              if (Array.isArray(directEntries)) {
-                providerEntries.push(...directEntries);
+        const [providerResponses, deckLookupSummary] = await Promise.all([
+          Promise.all(
+            providerIds.map(async (providerId) => {
+              const provider = dictionaryProviders[providerId];
+              if (!provider) {
+                return { providerId, entries: [], embeddedCount: 0 };
               }
-            } catch (error) {
-              console.warn(`Lookup failed for ${providerLabel}`, error);
-            }
 
-            try {
-              const embeddedEntries = await searchWithinEntries(term, providerId);
-              providerEmbeddedCount += embeddedEntries.length;
-              if (Array.isArray(embeddedEntries)) {
-                providerEntries.push(...embeddedEntries);
+              const providerEntries = [];
+              let providerEmbeddedCount = 0;
+              const providerLabel = provider.label || providerId;
+
+              try {
+                const directEntries = await provider.fetchEntries(term);
+                if (Array.isArray(directEntries)) {
+                  providerEntries.push(...directEntries);
+                }
+              } catch (error) {
+                console.warn(`Lookup failed for ${providerLabel}`, error);
               }
-            } catch (embeddedError) {
-              console.warn(`Embedded search failed for ${providerLabel}`, embeddedError);
-            }
 
-            return { providerId, entries: providerEntries, embeddedCount: providerEmbeddedCount };
-          })
-        );
+              try {
+                const embeddedEntries = await searchWithinEntries(term, providerId);
+                providerEmbeddedCount += embeddedEntries.length;
+                if (Array.isArray(embeddedEntries)) {
+                  providerEntries.push(...embeddedEntries);
+                }
+              } catch (embeddedError) {
+                console.warn(`Embedded search failed for ${providerLabel}`, embeddedError);
+              }
+
+              return { providerId, entries: providerEntries, embeddedCount: providerEmbeddedCount };
+            })
+          ),
+          findDeckEntries(term, deckName),
+        ]);
 
         providerResponses.forEach(({ providerId, entries, embeddedCount }) => {
           embeddedMatchCount += embeddedCount;
@@ -1293,9 +1638,20 @@
           addEntries(entries, providerLabel);
         });
 
+        if (deckLookupSummary.entries.length) {
+          addEntries(deckLookupSummary.entries, deckLookupSummary.deckName || "Existing cards", {
+            prepend: true,
+            trackProvider: false,
+          });
+        }
+
         if (!collectedEntries.length) {
           renderDictionaryResults([]);
-          setStatus("No entries available.", "error");
+          let emptyMessage = "No entries available.";
+          if (deckLookupSummary.deckName && deckLookupSummary.error) {
+            emptyMessage += ` Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`;
+          }
+          setStatus(emptyMessage, "error");
           return;
         }
 
@@ -1317,7 +1673,30 @@
         const embeddedNote = embeddedMatchCount
           ? ` including ${embeddedMatchCount} embedded match${embeddedMatchCount === 1 ? "" : "es"}`
           : "";
-        setStatus(`Dictionary results loaded from ${providerSummary}${embeddedNote}.`, "success");
+        const statusParts = [`Dictionary results loaded from ${providerSummary}${embeddedNote}.`];
+
+        if (deckLookupSummary.deckName) {
+          if (deckLookupSummary.error) {
+            statusParts.push(
+              `Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`
+            );
+          } else if (deckLookupSummary.totalCount > 0) {
+            let deckMessage = `Found ${deckLookupSummary.totalCount} existing card${
+              deckLookupSummary.totalCount === 1 ? "" : "s"
+            } in "${deckLookupSummary.deckName}"`;
+            if (deckLookupSummary.truncated && deckLookupSummary.shownCount) {
+              deckMessage += ` (showing first ${deckLookupSummary.shownCount}).`;
+            } else {
+              deckMessage += ".";
+            }
+            statusParts.push(deckMessage);
+          } else {
+            statusParts.push(`No existing cards matched in "${deckLookupSummary.deckName}".`);
+          }
+        }
+
+        const statusType = deckLookupSummary.error ? "error" : "success";
+        setStatus(statusParts.join(" "), statusType);
       } catch (error) {
         console.error(error);
         dictionaryResults.textContent = "No entries available.";
