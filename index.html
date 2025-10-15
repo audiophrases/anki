@@ -127,13 +127,18 @@
 
     .dictionary-controls {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(140px, 200px) auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 0.75rem;
       align-items: center;
     }
 
-    .dictionary-controls select {
-      min-width: 0;
+    .dictionary-scope {
+      background: rgba(63, 100, 199, 0.12);
+      color: #2a3d82;
+      border-radius: 999px;
+      padding: 0.45rem 1rem;
+      font-weight: 600;
+      white-space: nowrap;
     }
 
     .dictionary-results {
@@ -255,11 +260,7 @@
         <h2>Dictionary Lookup</h2>
         <div class="dictionary-controls">
           <input type="text" id="lookup-term" placeholder="Search term" />
-          <select id="dictionary-source">
-            <option value="freeDictionary" selected>Free Dictionary</option>
-            <option value="wiktionary">Wiktionary</option>
-            <option value="urban">Urban Dictionary</option>
-          </select>
+          <div class="dictionary-scope" aria-live="polite">All dictionaries</div>
           <button id="search-dictionary">Search</button>
         </div>
         <div class="dictionary-results" id="dictionary-results"></div>
@@ -309,7 +310,6 @@
     const loadDecksBtn = document.getElementById("load-decks");
     const lookupTermInput = document.getElementById("lookup-term");
     const searchButton = document.getElementById("search-dictionary");
-    const dictionarySourceSelect = document.getElementById("dictionary-source");
     const dictionaryResults = document.getElementById("dictionary-results");
     const frontField = document.getElementById("front-field");
     const backField = document.getElementById("back-field");
@@ -331,7 +331,6 @@
     const SESSION_KEYS = {
       credentials: "anki.session.credentials",
       deck: "anki.session.deck",
-      dictionary: "anki.session.dictionary",
     };
 
     function safeParseJSON(value, fallback = null) {
@@ -390,15 +389,6 @@
       }
     }
 
-    function persistDictionarySelection() {
-      const dictionary = dictionarySourceSelect.value;
-      if (dictionary) {
-        setSessionItem(SESSION_KEYS.dictionary, dictionary);
-      } else {
-        setSessionItem(SESSION_KEYS.dictionary, null);
-      }
-    }
-
     function setStatus(message, type = "") {
       statusEl.textContent = message;
       statusEl.className = "status" + (type ? " " + type : "");
@@ -411,8 +401,6 @@
     if (savedCredentials?.password) {
       passwordInput.value = savedCredentials.password;
     }
-
-    const storedDictionaryId = getSessionItem(SESSION_KEYS.dictionary);
 
     function updatePreview() {
       const deckName = deckSelect.value ? deckSelect.value : "—";
@@ -433,8 +421,6 @@
     usernameInput.addEventListener("input", persistCredentials);
     passwordInput.addEventListener("input", persistCredentials);
     deckSelect.addEventListener("change", persistDeckSelection);
-    dictionarySourceSelect.addEventListener("change", persistDictionarySelection);
-
     async function callAnkiConnect(action, params = {}) {
       let response;
       try {
@@ -655,27 +641,20 @@
         label: "Free Dictionary",
         fetchEntries: fetchFreeDictionaryEntries,
         supportsEmbeddedSearch: true,
-        fallbacks: ["wiktionary", "urban"],
       },
       wiktionary: {
         id: "wiktionary",
         label: "Wiktionary",
         fetchEntries: fetchWiktionaryEntries,
         supportsEmbeddedSearch: true,
-        fallbacks: ["freeDictionary", "urban"],
       },
       urban: {
         id: "urban",
         label: "Urban Dictionary",
         fetchEntries: fetchUrbanEntries,
         supportsEmbeddedSearch: false,
-        fallbacks: ["freeDictionary", "wiktionary"],
       },
     };
-
-    if (storedDictionaryId && dictionaryProviders[storedDictionaryId]) {
-      dictionarySourceSelect.value = storedDictionaryId;
-    }
 
     async function searchWithinEntries(term, providerId) {
       const provider = dictionaryProviders[providerId];
@@ -935,24 +914,16 @@
         return;
       }
 
-      persistDictionarySelection();
-
-      const providerId = dictionarySourceSelect.value in dictionaryProviders
-        ? dictionarySourceSelect.value
-        : "freeDictionary";
-      const provider = dictionaryProviders[providerId] || dictionaryProviders.freeDictionary;
-      const providerLabel = provider.label || "dictionary";
-
-      setStatus(`Searching ${providerLabel} for "${term}"…`);
+      setStatus(`Searching all dictionaries for "${term}"…`);
       searchButton.disabled = true;
       dictionaryResults.textContent = "Searching…";
 
       const uniqueEntryKeys = new Set();
       const collectedEntries = [];
-      let usedProviderId = providerId;
+      const contributingProviders = new Set();
       let embeddedMatchCount = 0;
 
-      const addEntries = (entries) => {
+      const addEntries = (entries, providerLabel = "") => {
         if (!Array.isArray(entries)) {
           return;
         }
@@ -977,40 +948,55 @@
           if (!uniqueEntryKeys.has(key)) {
             uniqueEntryKeys.add(key);
             collectedEntries.push(entry);
+            const contributorLabel = entry.source || providerLabel;
+            if (contributorLabel) {
+              contributingProviders.add(contributorLabel);
+            }
           }
         });
       };
 
       try {
-        addEntries(await provider.fetchEntries(term));
-
-        const primaryEmbedded = await searchWithinEntries(term, providerId);
-        embeddedMatchCount += primaryEmbedded.length;
-        addEntries(primaryEmbedded);
-
-        if (!collectedEntries.length) {
-          for (const fallbackId of provider.fallbacks || []) {
-            const fallback = dictionaryProviders[fallbackId];
-            if (!fallback) {
-              continue;
+        const providerIds = Object.keys(dictionaryProviders);
+        const providerResponses = await Promise.all(
+          providerIds.map(async (providerId) => {
+            const provider = dictionaryProviders[providerId];
+            if (!provider) {
+              return { providerId, entries: [], embeddedCount: 0 };
             }
+
+            const providerEntries = [];
+            let providerEmbeddedCount = 0;
+            const providerLabel = provider.label || providerId;
+
             try {
-              const beforeFallbackCount = collectedEntries.length;
-              addEntries(await fallback.fetchEntries(term));
-
-              const fallbackEmbedded = await searchWithinEntries(term, fallbackId);
-              embeddedMatchCount += fallbackEmbedded.length;
-              addEntries(fallbackEmbedded);
-
-              if (collectedEntries.length > beforeFallbackCount) {
-                usedProviderId = fallbackId;
-                break;
+              const directEntries = await provider.fetchEntries(term);
+              if (Array.isArray(directEntries)) {
+                providerEntries.push(...directEntries);
               }
-            } catch (fallbackError) {
-              console.warn(`Fallback lookup failed for ${fallbackId}`, fallbackError);
+            } catch (error) {
+              console.warn(`Lookup failed for ${providerLabel}`, error);
             }
-          }
-        }
+
+            try {
+              const embeddedEntries = await searchWithinEntries(term, providerId);
+              providerEmbeddedCount += embeddedEntries.length;
+              if (Array.isArray(embeddedEntries)) {
+                providerEntries.push(...embeddedEntries);
+              }
+            } catch (embeddedError) {
+              console.warn(`Embedded search failed for ${providerLabel}`, embeddedError);
+            }
+
+            return { providerId, entries: providerEntries, embeddedCount: providerEmbeddedCount };
+          })
+        );
+
+        providerResponses.forEach(({ providerId, entries, embeddedCount }) => {
+          embeddedMatchCount += embeddedCount;
+          const providerLabel = dictionaryProviders[providerId]?.label || providerId;
+          addEntries(entries, providerLabel);
+        });
 
         if (!collectedEntries.length) {
           renderDictionaryResults([]);
@@ -1019,9 +1005,24 @@
         }
 
         renderDictionaryResults(collectedEntries);
-        const usedLabel = dictionaryProviders[usedProviderId]?.label || providerLabel;
-        const noteSuffix = embeddedMatchCount ? " (including embedded matches)" : "";
-        setStatus(`Dictionary results loaded from ${usedLabel}${noteSuffix}`, "success");
+        const providerCount = contributingProviders.size;
+        const totalProviders = providerIds.length;
+        const providerList = Array.from(contributingProviders);
+        let providerSummary;
+        if (providerCount === totalProviders && providerCount > 0) {
+          providerSummary = "all dictionaries";
+        } else if (providerCount === 1) {
+          providerSummary = providerList[0];
+        } else if (providerCount > 1) {
+          providerSummary = `${providerCount} dictionaries (${providerList.join(", ")})`;
+        } else {
+          providerSummary = "the available dictionaries";
+        }
+
+        const embeddedNote = embeddedMatchCount
+          ? ` including ${embeddedMatchCount} embedded match${embeddedMatchCount === 1 ? "" : "es"}`
+          : "";
+        setStatus(`Dictionary results loaded from ${providerSummary}${embeddedNote}.`, "success");
       } catch (error) {
         console.error(error);
         dictionaryResults.textContent = "No entries available.";
