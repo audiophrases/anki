@@ -249,7 +249,8 @@
 
       <section>
         <label for="model-name">Note Type</label>
-        <input type="text" id="model-name" value="Basic" />
+        <input type="text" id="model-name" value="Basic" list="model-suggestions" />
+        <datalist id="model-suggestions"></datalist>
         <label for="tags" style="margin-top: 1rem;">Tags (comma separated)</label>
         <input type="text" id="tags" placeholder="vocab, dictionary" />
       </section>
@@ -319,6 +320,7 @@
     const usernameInput = document.getElementById("anki-username");
     const passwordInput = document.getElementById("anki-password");
     const modelNameInput = document.getElementById("model-name");
+    const modelSuggestions = document.getElementById("model-suggestions");
     const tagsInput = document.getElementById("tags");
 
     const previewDeck = document.getElementById("preview-deck");
@@ -332,6 +334,13 @@
       credentials: "anki.session.credentials",
       deck: "anki.session.deck",
     };
+
+    const DEFAULT_MODEL_NAME = "Basic";
+    const NOTE_SAMPLE_BATCH_SIZE = 200;
+    const NOTE_SAMPLE_BATCH_LIMIT = 5;
+
+    let userModifiedNoteType = false;
+    let pendingNoteTypeDeck = "";
 
     function safeParseJSON(value, fallback = null) {
       if (!value) {
@@ -405,7 +414,7 @@
     function updatePreview() {
       const deckName = deckSelect.value ? deckSelect.value : "—";
       previewDeck.textContent = deckName;
-      previewModel.textContent = modelNameInput.value.trim() || "Basic";
+      previewModel.textContent = modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
       const tags = tagsInput.value.trim();
       previewTags.textContent = tags || "—";
       previewFront.textContent = frontField.value;
@@ -413,14 +422,49 @@
       previewExample.textContent = exampleField.value;
     }
 
-    [frontField, backField, exampleField, modelNameInput, tagsInput, deckSelect].forEach((element) => {
+    [frontField, backField, exampleField, tagsInput].forEach((element) => {
       element.addEventListener("input", updatePreview);
       element.addEventListener("change", updatePreview);
     });
 
+    function handleModelNameInput() {
+      userModifiedNoteType = true;
+      updatePreview();
+    }
+
+    modelNameInput.addEventListener("input", handleModelNameInput);
+    modelNameInput.addEventListener("change", handleModelNameInput);
+
+    function updateModelSuggestions(noteTypes) {
+      if (!modelSuggestions) {
+        return;
+      }
+
+      modelSuggestions.innerHTML = "";
+      noteTypes.forEach((noteType) => {
+        if (!noteType) {
+          return;
+        }
+        const option = document.createElement("option");
+        option.value = noteType;
+        modelSuggestions.appendChild(option);
+      });
+    }
+
+    deckSelect.addEventListener("change", () => {
+      persistDeckSelection();
+      userModifiedNoteType = false;
+      updatePreview();
+      const deckName = deckSelect.value;
+      if (deckName) {
+        loadNoteTypesForDeck(deckName);
+      } else {
+        updateModelSuggestions([]);
+      }
+    });
+
     usernameInput.addEventListener("input", persistCredentials);
     passwordInput.addEventListener("input", persistCredentials);
-    deckSelect.addEventListener("change", persistDeckSelection);
     async function callAnkiConnect(action, params = {}) {
       let response;
       try {
@@ -714,7 +758,19 @@
     }
 
     function escapeRegExp(value) {
-      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (value === null || value === undefined) {
+        return "";
+      }
+
+      return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function escapeDeckNameForQuery(deckName) {
+      if (!deckName) {
+        return "";
+      }
+
+      return deckName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     }
 
     function createMaskFromMatch(match) {
@@ -756,6 +812,126 @@
       return text.replace(pattern, (match) => createMaskFromMatch(match));
     }
 
+    async function loadNoteTypesForDeck(deckName) {
+      if (!deckName) {
+        pendingNoteTypeDeck = "";
+        updateModelSuggestions([]);
+        return;
+      }
+
+      pendingNoteTypeDeck = deckName;
+
+      try {
+        const sanitizedDeckName = escapeDeckNameForQuery(deckName);
+        const noteIds = await callAnkiConnect("findNotes", {
+          query: `deck:"${sanitizedDeckName}"`,
+        });
+
+        if (pendingNoteTypeDeck !== deckName) {
+          return;
+        }
+
+        const noteTypeSet = new Set();
+
+        if (Array.isArray(noteIds) && noteIds.length) {
+          const batchLimit = Math.max(1, NOTE_SAMPLE_BATCH_LIMIT);
+          for (
+            let index = 0;
+            index < noteIds.length && index / NOTE_SAMPLE_BATCH_SIZE < batchLimit;
+            index += NOTE_SAMPLE_BATCH_SIZE
+          ) {
+            const batch = noteIds.slice(index, index + NOTE_SAMPLE_BATCH_SIZE);
+            if (!batch.length) {
+              continue;
+            }
+
+            const notesInfo = await callAnkiConnect("notesInfo", { notes: batch });
+
+            if (pendingNoteTypeDeck !== deckName) {
+              return;
+            }
+
+            if (Array.isArray(notesInfo)) {
+              notesInfo.forEach((note) => {
+                if (note && note.modelName) {
+                  noteTypeSet.add(note.modelName);
+                }
+              });
+            }
+
+            if (batch.length < NOTE_SAMPLE_BATCH_SIZE) {
+              break;
+            }
+          }
+        }
+
+        if (pendingNoteTypeDeck !== deckName) {
+          return;
+        }
+
+        let noteTypes = Array.from(noteTypeSet).sort((a, b) => a.localeCompare(b));
+        let statusMessage = "";
+
+        if (!noteTypes.length) {
+          const allModelNames = await callAnkiConnect("modelNames");
+
+          if (pendingNoteTypeDeck !== deckName) {
+            return;
+          }
+
+          if (Array.isArray(allModelNames)) {
+            allModelNames.forEach((name) => {
+              if (name) {
+                noteTypeSet.add(name);
+              }
+            });
+          }
+
+          noteTypes = Array.from(noteTypeSet).sort((a, b) => a.localeCompare(b));
+
+          if (!noteTypes.length) {
+            throw new Error("No note types available.");
+          }
+
+          statusMessage = `No existing notes found in "${deckName}". Showing all note types.`;
+        } else {
+          statusMessage = `Loaded ${noteTypes.length} note type${
+            noteTypes.length === 1 ? "" : "s"
+          } from "${deckName}".`;
+        }
+
+        if (pendingNoteTypeDeck !== deckName) {
+          return;
+        }
+
+        updateModelSuggestions(noteTypes);
+
+        const currentModelName = modelNameInput.value.trim();
+        if (!userModifiedNoteType || !noteTypes.includes(currentModelName)) {
+          const preferredModelName = noteTypes.includes(DEFAULT_MODEL_NAME)
+            ? DEFAULT_MODEL_NAME
+            : noteTypes[0] || currentModelName;
+
+          if (preferredModelName && preferredModelName !== currentModelName) {
+            modelNameInput.value = preferredModelName;
+            updatePreview();
+          }
+
+          userModifiedNoteType = false;
+        }
+
+        setStatus(statusMessage, "success");
+      } catch (error) {
+        if (pendingNoteTypeDeck !== deckName) {
+          return;
+        }
+
+        console.error(error);
+        updateModelSuggestions([]);
+        setStatus(error.message || "Failed to load note types", "error");
+      }
+    }
+
     async function loadDecks() {
       setStatus("Loading decks…");
       loadDecksBtn.disabled = true;
@@ -785,8 +961,12 @@
           if (savedDeck && deckNames.includes(savedDeck)) {
             deckSelect.value = savedDeck;
             persistDeckSelection();
+            await loadNoteTypesForDeck(savedDeck);
+            updatePreview();
+            return;
           }
         }
+        updateModelSuggestions([]);
         setStatus("Decks loaded", "success");
         updatePreview();
       } catch (error) {
@@ -1034,7 +1214,7 @@
 
     async function addCard() {
       const deckName = deckSelect.value;
-      const modelName = modelNameInput.value.trim() || "Basic";
+      const modelName = modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
       const front = frontField.value.trim();
       const back = backField.value.trim();
 
