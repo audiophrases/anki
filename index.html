@@ -132,6 +132,9 @@
       display: flex;
       flex-direction: column;
       gap: 2rem;
+      max-height: calc(100vh - 4rem);
+      overflow-y: auto;
+      min-height: 0;
     }
 
     .sidebar-toggle {
@@ -151,6 +154,13 @@
       border-radius: 16px;
       padding: 1.5rem;
       box-shadow: 0 10px 30px rgba(43, 58, 92, 0.1);
+    }
+
+    #note-panel {
+      position: sticky;
+      top: 2rem;
+      align-self: flex-start;
+      width: 100%;
     }
 
     .setup-notice {
