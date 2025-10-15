@@ -97,8 +97,8 @@
     }
 
     textarea {
-      min-height: 120px;
       resize: vertical;
+      overflow: hidden;
     }
 
     button {
@@ -701,6 +701,16 @@
       back: backFieldLabel ? backFieldLabel.textContent : "Back",
       example: exampleFieldLabel ? exampleFieldLabel.textContent : "Example Sentence (optional)",
     };
+
+    function adjustTextareaHeight(textarea) {
+      if (!textarea) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        textarea.style.height = "auto";
+        textarea.style.height = `${textarea.scrollHeight}px`;
+      });
+    }
 
     const SESSION_KEYS = {
       credentials: "anki.session.credentials",
@@ -1309,13 +1319,23 @@
         if (element === frontField) {
           refreshMaskedWordField();
         }
+        if (element?.tagName === "TEXTAREA") {
+          adjustTextareaHeight(element);
+        }
       });
       element.addEventListener("change", () => {
         updatePreview();
         if (element === frontField) {
           refreshMaskedWordField();
         }
+        if (element?.tagName === "TEXTAREA") {
+          adjustTextareaHeight(element);
+        }
       });
+    });
+
+    [frontField, backField, exampleField].forEach((textarea) => {
+      adjustTextareaHeight(textarea);
     });
 
     function handleModelNameInput(event) {
@@ -2353,6 +2373,7 @@
       }
 
       maskedEditor.value = deriveMaskedWordValue(wordEditor.value);
+      adjustTextareaHeight(maskedEditor);
     }
 
     function applyModelFieldMetadata(
@@ -2391,6 +2412,9 @@
           fieldName && preservedValues.has(fieldName) ? preservedValues.get(fieldName) : "";
         element.dataset.fieldName = fieldName || "";
         element.value = fieldName ? previousValue : "";
+        if (element.tagName === "TEXTAREA") {
+          adjustTextareaHeight(element);
+        }
 
         if (labelElement) {
           labelElement.textContent = fieldName || defaultLabel;
@@ -2424,6 +2448,7 @@
       );
       if (!exampleFieldName && exampleField) {
         exampleField.value = "";
+        adjustTextareaHeight(exampleField);
       }
 
       if (additionalFieldsContainer) {
@@ -2447,10 +2472,12 @@
           if (fieldName === maskedFieldName) {
             textarea.readOnly = true;
           }
+          textarea.addEventListener("input", () => adjustTextareaHeight(textarea));
 
           wrapper.appendChild(label);
           wrapper.appendChild(textarea);
           additionalFieldsContainer.appendChild(wrapper);
+          adjustTextareaHeight(textarea);
 
           fieldEditors.set(fieldName, textarea);
           additionalFieldEditors.set(fieldName, { element: textarea, label, wrapper });
@@ -2486,6 +2513,7 @@
 
       updatePreview();
       refreshMaskedWordField();
+      fieldEditors.forEach((editor) => adjustTextareaHeight(editor));
     }
 
     async function ensureModelFieldMetadata(modelName) {
@@ -2746,6 +2774,7 @@
           return;
         }
         editor.value = fields[fieldName] || "";
+        adjustTextareaHeight(editor);
       });
 
       noteDetails.modelName = modelName;
@@ -2836,6 +2865,7 @@
           const maskedEditor = fieldEditors.get(maskedFieldName);
           if (maskedEditor) {
             maskedEditor.value = maskedValue;
+            adjustTextareaHeight(maskedEditor);
           }
         }
       }
@@ -3246,6 +3276,7 @@
                 definition.example,
                 lookupTerm
               );
+              adjustTextareaHeight(exampleField);
               updatePreview();
               setStatus("Example added to the card", "success");
             });
@@ -3257,8 +3288,10 @@
                 definition.definition,
                 lookupTerm
               );
+              adjustTextareaHeight(backField);
               if (!frontField.value.trim()) {
                 frontField.value = entry.word || lookupTerm;
+                adjustTextareaHeight(frontField);
               }
               refreshMaskedWordField();
               updatePreview();
@@ -3801,6 +3834,7 @@
         const maskedEditor = fieldEditors.get(maskedFieldName);
         if (maskedEditor) {
           maskedEditor.value = maskedValue;
+          adjustTextareaHeight(maskedEditor);
         }
       }
 
