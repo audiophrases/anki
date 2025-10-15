@@ -1,1 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anki Card Creator</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      font-size: 16px;
+    }
 
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top left, #f7f8ff, #eaeefd 40%, #e0e0f5);
+      min-height: 100vh;
+      color: #1e2a44;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 2rem;
+      box-sizing: border-box;
+    }
+
+    .app {
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 20px 60px rgba(58, 75, 115, 0.25);
+      border-radius: 20px;
+      max-width: 1100px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      padding: 2rem;
+      background: linear-gradient(180deg, #3f64c7, #4650ac);
+      color: white;
+    }
+
+    .sidebar h1 {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      font-size: 1.9rem;
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar section + section {
+      margin-top: 2.5rem;
+    }
+
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid rgba(30, 42, 68, 0.2);
+      border-radius: 10px;
+      padding: 0.7rem 0.85rem;
+      font-size: 1rem;
+      font-family: inherit;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.95);
+      color: inherit;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    button {
+      background: #3f64c7;
+      border: none;
+      border-radius: 999px;
+      padding: 0.65rem 1.35rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 10px 30px rgba(63, 100, 199, 0.3);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 32px rgba(63, 100, 199, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .main {
+      padding: 2rem 2.5rem;
+      background: rgba(249, 250, 255, 0.9);
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 30px rgba(43, 58, 92, 0.1);
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.35rem;
+      color: #2f4075;
+    }
+
+    .dictionary-results {
+      display: grid;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .definition-card {
+      border: 1px solid rgba(63, 100, 199, 0.18);
+      border-radius: 14px;
+      padding: 1rem;
+      background: rgba(242, 245, 255, 0.6);
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .definition-card header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .badge {
+      background: rgba(63, 100, 199, 0.15);
+      color: #2a3d82;
+      border-radius: 999px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .definition-text {
+      font-size: 1rem;
+    }
+
+    .example-text {
+      font-style: italic;
+      color: #42507b;
+    }
+
+    .status {
+      font-size: 0.95rem;
+      min-height: 1.5rem;
+    }
+
+    .status.success {
+      color: #1a8f5b;
+    }
+
+    .status.error {
+      color: #cc2b3d;
+    }
+
+    .split {
+      display: grid;
+      gap: 1rem;
+    }
+
+    @media (max-width: 980px) {
+      body {
+        padding: 1rem;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+      }
+
+      .main {
+        padding: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>Anki Card Creator</h1>
+      <section>
+        <label for="anki-username">AnkiWeb Username</label>
+        <input type="text" id="anki-username" placeholder="name@example.com" autocomplete="username" />
+        <label for="anki-password" style="margin-top: 1rem;">AnkiWeb Password</label>
+        <input type="password" id="anki-password" placeholder="••••••••" autocomplete="current-password" />
+      </section>
+
+      <section>
+        <label for="deck-select">Deck</label>
+        <div class="split">
+          <select id="deck-select">
+            <option value="" disabled selected>Load decks via AnkiConnect</option>
+          </select>
+          <button id="load-decks">Load Decks</button>
+        </div>
+      </section>
+
+      <section>
+        <label for="model-name">Note Type</label>
+        <input type="text" id="model-name" value="Basic" />
+        <label for="tags" style="margin-top: 1rem;">Tags (comma separated)</label>
+        <input type="text" id="tags" placeholder="vocab, dictionary" />
+      </section>
+    </aside>
+
+    <main class="main">
+      <section class="panel" id="dictionary-panel">
+        <h2>Dictionary Lookup</h2>
+        <div class="split" style="grid-template-columns: 1fr auto; align-items: center;">
+          <input type="text" id="lookup-term" placeholder="Search term" />
+          <button id="search-dictionary">Search</button>
+        </div>
+        <div class="dictionary-results" id="dictionary-results"></div>
+      </section>
+
+      <section class="panel" id="note-panel">
+        <h2>Customize Card</h2>
+        <div class="split" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+          <div>
+            <label for="front-field">Front</label>
+            <textarea id="front-field" placeholder="Front of the card"></textarea>
+          </div>
+          <div>
+            <label for="back-field">Back</label>
+            <textarea id="back-field" placeholder="Back of the card"></textarea>
+          </div>
+        </div>
+        <div class="split" style="margin-top: 1.5rem;">
+          <label for="example-field">Example Sentence (optional)</label>
+          <textarea id="example-field" placeholder="Add your own or pick one from the dictionary results"></textarea>
+        </div>
+        <div style="margin-top: 1.5rem; display: flex; gap: 1rem; align-items: center;">
+          <button id="add-card">Add Card to Deck</button>
+          <span class="status" id="status"></span>
+        </div>
+      </section>
+
+      <section class="panel" id="preview-panel">
+        <h2>Preview</h2>
+        <p><strong>Deck:</strong> <span id="preview-deck">—</span></p>
+        <p><strong>Note Type:</strong> <span id="preview-model">Basic</span></p>
+        <p><strong>Tags:</strong> <span id="preview-tags">—</span></p>
+        <article style="margin-top: 1rem; padding: 1rem; border-radius: 12px; background: rgba(63, 100, 199, 0.08);">
+          <h3 style="margin-top: 0;">Front</h3>
+          <p id="preview-front" style="white-space: pre-wrap;"></p>
+          <h3>Back</h3>
+          <p id="preview-back" style="white-space: pre-wrap;"></p>
+          <h3>Example</h3>
+          <p id="preview-example" style="white-space: pre-wrap;"></p>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const deckSelect = document.getElementById("deck-select");
+    const loadDecksBtn = document.getElementById("load-decks");
+    const lookupTermInput = document.getElementById("lookup-term");
+    const searchButton = document.getElementById("search-dictionary");
+    const dictionaryResults = document.getElementById("dictionary-results");
+    const frontField = document.getElementById("front-field");
+    const backField = document.getElementById("back-field");
+    const exampleField = document.getElementById("example-field");
+    const addCardBtn = document.getElementById("add-card");
+    const statusEl = document.getElementById("status");
+    const usernameInput = document.getElementById("anki-username");
+    const passwordInput = document.getElementById("anki-password");
+    const modelNameInput = document.getElementById("model-name");
+    const tagsInput = document.getElementById("tags");
+
+    const previewDeck = document.getElementById("preview-deck");
+    const previewModel = document.getElementById("preview-model");
+    const previewTags = document.getElementById("preview-tags");
+    const previewFront = document.getElementById("preview-front");
+    const previewBack = document.getElementById("preview-back");
+    const previewExample = document.getElementById("preview-example");
+
+    function setStatus(message, type = "") {
+      statusEl.textContent = message;
+      statusEl.className = "status" + (type ? " " + type : "");
+    }
+
+    function updatePreview() {
+      const deckName = deckSelect.value ? deckSelect.value : "—";
+      previewDeck.textContent = deckName;
+      previewModel.textContent = modelNameInput.value.trim() || "Basic";
+      const tags = tagsInput.value.trim();
+      previewTags.textContent = tags || "—";
+      previewFront.textContent = frontField.value;
+      previewBack.textContent = backField.value;
+      previewExample.textContent = exampleField.value;
+    }
+
+    [frontField, backField, exampleField, modelNameInput, tagsInput, deckSelect].forEach((element) => {
+      element.addEventListener("input", updatePreview);
+      element.addEventListener("change", updatePreview);
+    });
+
+    async function callAnkiConnect(action, params = {}) {
+      const response = await fetch("http://127.0.0.1:8765", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, version: 6, params }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`AnkiConnect request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      return data.result;
+    }
+
+    async function loadDecks() {
+      setStatus("Loading decks…");
+      loadDecksBtn.disabled = true;
+      try {
+        const deckNames = await callAnkiConnect("deckNames");
+        deckSelect.innerHTML = "";
+        if (!deckNames.length) {
+          const option = document.createElement("option");
+          option.textContent = "No decks found";
+          option.disabled = true;
+          option.selected = true;
+          deckSelect.appendChild(option);
+        } else {
+          const placeholder = document.createElement("option");
+          placeholder.textContent = "Choose a deck";
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          placeholder.value = "";
+          deckSelect.appendChild(placeholder);
+          for (const deck of deckNames) {
+            const option = document.createElement("option");
+            option.value = deck;
+            option.textContent = deck;
+            deckSelect.appendChild(option);
+          }
+        }
+        setStatus("Decks loaded", "success");
+        updatePreview();
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "Failed to load decks", "error");
+      } finally {
+        loadDecksBtn.disabled = false;
+      }
+    }
+
+    function buildDefinitionCard(entry, meaning, definitionIndex) {
+      const card = document.createElement("div");
+      card.className = "definition-card";
+
+      const header = document.createElement("header");
+      const partOfSpeech = document.createElement("span");
+      partOfSpeech.className = "badge";
+      partOfSpeech.textContent = meaning.partOfSpeech || "Definition";
+      const button = document.createElement("button");
+      button.textContent = "Use this meaning";
+      button.addEventListener("click", () => {
+        const definitionText = meaning.definitions[definitionIndex]?.definition || "";
+        const exampleText = meaning.definitions[definitionIndex]?.example || "";
+        frontField.value = lookupTermInput.value.trim();
+        backField.value = definitionText;
+        if (exampleText) {
+          exampleField.value = exampleText;
+        }
+        updatePreview();
+        setStatus("Definition inserted into the card editor", "success");
+      });
+      header.appendChild(partOfSpeech);
+      header.appendChild(button);
+      card.appendChild(header);
+
+      const definitionText = document.createElement("p");
+      definitionText.className = "definition-text";
+      definitionText.textContent = meaning.definitions[definitionIndex]?.definition || "";
+      card.appendChild(definitionText);
+
+      const example = meaning.definitions[definitionIndex]?.example;
+      if (example) {
+        const examplePara = document.createElement("p");
+        examplePara.className = "example-text";
+        examplePara.textContent = example;
+        const exampleButton = document.createElement("button");
+        exampleButton.textContent = "Use this example";
+        exampleButton.addEventListener("click", () => {
+          exampleField.value = example;
+          updatePreview();
+          setStatus("Example added to the card", "success");
+        });
+
+        const exampleWrapper = document.createElement("div");
+        exampleWrapper.style.display = "grid";
+        exampleWrapper.style.gap = "0.6rem";
+        exampleWrapper.appendChild(examplePara);
+        exampleWrapper.appendChild(exampleButton);
+        card.appendChild(exampleWrapper);
+      }
+
+      if (entry.phonetic) {
+        const phonetic = document.createElement("p");
+        phonetic.style.margin = "0";
+        phonetic.innerHTML = `<strong>Phonetic:</strong> ${entry.phonetic}`;
+        card.appendChild(phonetic);
+      }
+
+      return card;
+    }
+
+    function renderDictionaryResults(entries) {
+      dictionaryResults.innerHTML = "";
+      if (!entries || !entries.length) {
+        dictionaryResults.textContent = "No results found.";
+        return;
+      }
+
+      entries.forEach((entry) => {
+        entry.meanings.forEach((meaning) => {
+          meaning.definitions.forEach((_def, index) => {
+            dictionaryResults.appendChild(buildDefinitionCard(entry, meaning, index));
+          });
+        });
+      });
+    }
+
+    async function searchDictionary() {
+      const term = lookupTermInput.value.trim();
+      if (!term) {
+        setStatus("Type a term to search", "error");
+        return;
+      }
+
+      setStatus(`Searching dictionary for "${term}"…`);
+      searchButton.disabled = true;
+      dictionaryResults.textContent = "Searching…";
+
+      try {
+        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`);
+        if (!response.ok) {
+          throw new Error("Dictionary lookup failed");
+        }
+
+        const data = await response.json();
+        renderDictionaryResults(data);
+        setStatus("Dictionary results loaded", "success");
+      } catch (error) {
+        console.error(error);
+        dictionaryResults.textContent = "No entries available.";
+        setStatus(error.message || "Failed to fetch dictionary results", "error");
+      } finally {
+        searchButton.disabled = false;
+      }
+    }
+
+    async function addCard() {
+      const deckName = deckSelect.value;
+      const modelName = modelNameInput.value.trim() || "Basic";
+      const front = frontField.value.trim();
+      const back = backField.value.trim();
+
+      if (!deckName) {
+        setStatus("Please choose a deck", "error");
+        return;
+      }
+
+      if (!front || !back) {
+        setStatus("Front and back cannot be empty", "error");
+        return;
+      }
+
+      setStatus("Adding card to deck…");
+      addCardBtn.disabled = true;
+
+      const example = exampleField.value.trim();
+      const tags = tagsInput.value
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      const fields = {
+        Front: front,
+        Back: example ? `${back}\n\n<em>${example}</em>` : back,
+      };
+
+      try {
+        await callAnkiConnect("addNote", {
+          note: {
+            deckName,
+            modelName,
+            fields,
+            tags,
+          },
+        });
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+        if (username && password) {
+          try {
+            await callAnkiConnect("sync", { ankiwebid: username, password });
+            setStatus("Card added and synced with AnkiWeb", "success");
+          } catch (syncError) {
+            console.warn("Sync failed", syncError);
+            setStatus(`Card added but sync failed: ${syncError.message}`, "error");
+          }
+        } else {
+          setStatus("Card added to Anki", "success");
+        }
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "Failed to add card", "error");
+      } finally {
+        addCardBtn.disabled = false;
+      }
+    }
+
+    loadDecksBtn.addEventListener("click", loadDecks);
+    searchButton.addEventListener("click", searchDictionary);
+    lookupTermInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        searchDictionary();
+      }
+    });
+    addCardBtn.addEventListener("click", addCard);
+
+    updatePreview();
+  </script>
+</body>
+</html>
