@@ -32,14 +32,36 @@
       max-width: 1100px;
       width: 100%;
       display: grid;
-      grid-template-columns: 340px 1fr;
+      grid-template-columns: minmax(280px, 340px) 1fr;
       overflow: hidden;
+      position: relative;
+      transition: grid-template-columns 0.3s ease;
     }
 
     .sidebar {
       padding: 2rem;
       background: linear-gradient(180deg, #3f64c7, #4650ac);
       color: white;
+      width: 100%;
+      max-width: 340px;
+      box-sizing: border-box;
+      transform: translateX(0);
+      transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s ease,
+        width 0.3s ease;
+      will-change: transform;
+      z-index: 20;
+    }
+
+    .app.is-sidebar-collapsed {
+      grid-template-columns: 1fr;
+    }
+
+    .app.is-sidebar-collapsed .sidebar {
+      transform: translateX(-100%);
+      width: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
     }
 
     .sidebar h1 {
@@ -110,6 +132,18 @@
       display: flex;
       flex-direction: column;
       gap: 2rem;
+    }
+
+    .sidebar-toggle {
+      align-self: flex-start;
+      margin-bottom: 1.5rem;
+      position: sticky;
+      top: 1.5rem;
+      z-index: 40;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
     }
 
     .panel {
@@ -428,22 +462,50 @@
 
       .app {
         grid-template-columns: 1fr;
+        min-height: calc(100vh - 2rem);
       }
 
       .sidebar {
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        max-width: min(320px, 90vw);
+        width: min(320px, 90vw);
+        height: 100%;
+        overflow-y: auto;
+        border-bottom-left-radius: 16px;
+        border-bottom-right-radius: 16px;
+        box-shadow: 0 24px 48px rgba(58, 75, 115, 0.35);
+        transform: translateX(-100%);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .app:not(.is-sidebar-collapsed) .sidebar {
+        transform: translateX(0);
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
       }
 
       .main {
         padding: 1.5rem;
+      }
+
+      .sidebar-toggle {
+        position: fixed;
+        top: 1.25rem;
+        right: 1.25rem;
+        margin-bottom: 0;
       }
     }
   </style>
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <h1>Anki Card Creator</h1>
       <section>
         <label for="anki-username">AnkiWeb Username</label>
@@ -480,6 +542,15 @@
     </aside>
 
     <main class="main">
+      <button
+        id="sidebar-toggle"
+        class="sidebar-toggle"
+        type="button"
+        aria-controls="sidebar"
+        aria-expanded="true"
+      >
+        Hide sidebar
+      </button>
       <section
         class="panel setup-notice"
         id="setup-notice"
@@ -614,6 +685,9 @@
     const tagsInput = document.getElementById("tags");
     const setupNotice = document.getElementById("setup-notice");
     const scopeToggleButtons = document.querySelectorAll(".scope-toggle button");
+    const appContainer = document.querySelector(".app");
+    const sidebar = document.getElementById("sidebar");
+    const sidebarToggle = document.getElementById("sidebar-toggle");
 
     const previewDeck = document.getElementById("preview-deck");
     const previewModel = document.getElementById("preview-model");
@@ -637,6 +711,7 @@
     const LOCAL_STORAGE_KEYS = {
       providerSelection: "anki.dictionary.providers",
       searchScope: "anki.dictionary.scope",
+      sidebarCollapsed: "anki.ui.sidebarCollapsed",
     };
 
     const DEFAULT_MODEL_NAME = "Basic";
@@ -763,6 +838,115 @@
         }
       } catch (error) {
         console.warn("Failed to persist local value", error);
+      }
+    }
+
+    const SIDEBAR_TOGGLE_LABELS = {
+      expanded: "Hide sidebar",
+      collapsed: "Show sidebar",
+    };
+
+    const focusableSidebarSelector = [
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      "[href]",
+      "[tabindex]:not([tabindex='-1'])",
+    ].join(", ");
+
+    function applySidebarCollapsedState(
+      collapsed,
+      { shouldStore = true, shouldFocus = false } = {}
+    ) {
+      if (!appContainer || !sidebarToggle) {
+        return;
+      }
+
+      appContainer.classList.toggle("is-sidebar-collapsed", collapsed);
+      sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+      sidebarToggle.textContent = collapsed
+        ? SIDEBAR_TOGGLE_LABELS.collapsed
+        : SIDEBAR_TOGGLE_LABELS.expanded;
+
+      if (shouldStore) {
+        setLocalStorageItem(
+          LOCAL_STORAGE_KEYS.sidebarCollapsed,
+          collapsed ? "true" : "false"
+        );
+      }
+
+      if (shouldFocus) {
+        if (collapsed) {
+          sidebarToggle.focus();
+          return;
+        }
+
+        const focusTarget =
+          (sidebar && sidebar.querySelector(focusableSidebarSelector)) ||
+          sidebar;
+
+        if (focusTarget) {
+          if (focusTarget === sidebar && !sidebar.hasAttribute("tabindex")) {
+            sidebar.setAttribute("tabindex", "-1");
+          }
+          focusTarget.focus();
+        }
+      }
+    }
+
+    function toggleSidebarState() {
+      if (!appContainer) {
+        return;
+      }
+
+      const currentlyCollapsed = appContainer.classList.contains(
+        "is-sidebar-collapsed"
+      );
+      applySidebarCollapsedState(!currentlyCollapsed, { shouldFocus: true });
+    }
+
+    function initializeSidebarToggle() {
+      if (!appContainer || !sidebar || !sidebarToggle) {
+        return;
+      }
+
+      const storedPreference = getLocalStorageItem(
+        LOCAL_STORAGE_KEYS.sidebarCollapsed
+      );
+      let collapsed = storedPreference === "true";
+
+      if (storedPreference === null && window.matchMedia) {
+        try {
+          collapsed = window.matchMedia("(max-width: 980px)").matches;
+        } catch (error) {
+          collapsed = false;
+        }
+      }
+
+      applySidebarCollapsedState(collapsed, { shouldStore: false });
+
+      sidebarToggle.addEventListener("click", () => {
+        toggleSidebarState();
+      });
+
+      sidebarToggle.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggleSidebarState();
+        }
+      });
+
+      if (sidebar) {
+        sidebar.addEventListener("keydown", (event) => {
+          if (
+            event.key === "Escape" &&
+            !appContainer.classList.contains("is-sidebar-collapsed")
+          ) {
+            event.preventDefault();
+            applySidebarCollapsedState(true, { shouldFocus: true });
+          }
+        });
       }
     }
 
@@ -2007,6 +2191,7 @@
       },
     };
 
+    initializeSidebarToggle();
     initializeScopeButtons();
     initializeDictionaryProviderOptions();
 
