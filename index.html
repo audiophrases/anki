@@ -1873,7 +1873,313 @@
       return fetchWiktionaryHtmlEntries(lookup);
     }
 
+    function extractPhoneticText(entry) {
+      if (!entry || typeof entry !== "object") {
+        return "";
+      }
+
+      const direct = typeof entry.phonetic === "string" ? entry.phonetic.trim() : "";
+      if (direct) {
+        return direct;
+      }
+
+      if (Array.isArray(entry.phonetics)) {
+        for (const phoneticEntry of entry.phonetics) {
+          const phoneticText =
+            typeof phoneticEntry?.text === "string" ? phoneticEntry.text.trim() : "";
+          if (phoneticText) {
+            return phoneticText;
+          }
+        }
+      }
+
+      return "";
+    }
+
+    function normalizeDictionaryApiDevEntries(payload, term) {
+      if (!Array.isArray(payload)) {
+        return [];
+      }
+
+      return payload
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return null;
+          }
+
+          const meanings = Array.isArray(entry.meanings)
+            ? entry.meanings
+                .map((meaning) => {
+                  if (!meaning || typeof meaning !== "object") {
+                    return null;
+                  }
+
+                  const definitions = Array.isArray(meaning.definitions)
+                    ? meaning.definitions
+                        .map((definition) => {
+                          const rawDefinition =
+                            typeof definition?.definition === "string"
+                              ? definition.definition
+                              : "";
+                          const cleanedDefinition = stripHtml(rawDefinition).trim();
+                          if (!cleanedDefinition) {
+                            return null;
+                          }
+
+                          const exampleAccumulator = [];
+                          if (definition?.example) {
+                            collectExampleStrings(definition.example, exampleAccumulator);
+                          }
+                          if (Array.isArray(definition?.examples)) {
+                            collectExampleStrings(definition.examples, exampleAccumulator);
+                          }
+
+                          const examples = Array.from(
+                            new Set(
+                              exampleAccumulator
+                                .map((example) =>
+                                  typeof example === "string" ? example.trim() : ""
+                                )
+                                .filter(Boolean)
+                            )
+                          );
+
+                          return {
+                            definition: cleanedDefinition,
+                            example: examples[0] || "",
+                            examples,
+                          };
+                        })
+                        .filter(Boolean)
+                    : [];
+
+                  if (!definitions.length) {
+                    return null;
+                  }
+
+                  const partOfSpeech =
+                    typeof meaning.partOfSpeech === "string"
+                      ? meaning.partOfSpeech.trim()
+                      : "";
+
+                  return {
+                    partOfSpeech: partOfSpeech || "Definition",
+                    definitions,
+                  };
+                })
+                .filter(Boolean)
+            : [];
+
+          if (!meanings.length) {
+            return null;
+          }
+
+          const phonetic = extractPhoneticText(entry);
+
+          const normalized = {
+            word: entry.word || term,
+            source: "DictionaryAPI.dev",
+            meanings,
+          };
+
+          if (phonetic) {
+            normalized.phonetic = phonetic;
+          }
+
+          return normalized;
+        })
+        .filter(Boolean);
+    }
+
+    async function fetchDictionaryApiDevEntries(term, parsedTerm) {
+      const lookup = parsedTerm?.term || term;
+      if (!lookup) {
+        return [];
+      }
+
+      const language = "en";
+      const url = `https://api.dictionaryapi.dev/api/v2/entries/${language}/${encodeURIComponent(
+        lookup
+      )}`;
+
+      let response;
+      try {
+        response = await fetch(url, {
+          headers: { Accept: "application/json" },
+        });
+      } catch (networkError) {
+        throw new Error("DictionaryAPI.dev lookup failed (network error)");
+      }
+
+      if (response.status === 404) {
+        return [];
+      }
+
+      if (!response.ok) {
+        throw new Error(`DictionaryAPI.dev lookup failed (status ${response.status})`);
+      }
+
+      const data = await response.json();
+      return normalizeDictionaryApiDevEntries(data, lookup);
+    }
+
+    function normalizeFreeDictionaryEntries(payload, term) {
+      if (!Array.isArray(payload)) {
+        return [];
+      }
+
+      return payload
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return null;
+          }
+
+          const meanings = Array.isArray(entry.meanings)
+            ? entry.meanings
+                .map((meaning) => {
+                  if (!meaning || typeof meaning !== "object") {
+                    return null;
+                  }
+
+                  const definitions = Array.isArray(meaning.definitions)
+                    ? meaning.definitions
+                        .map((definition) => {
+                          const rawDefinition =
+                            typeof definition?.definition === "string"
+                              ? definition.definition
+                              : "";
+                          const cleanedDefinition = stripHtml(rawDefinition).trim();
+                          if (!cleanedDefinition) {
+                            return null;
+                          }
+
+                          const exampleAccumulator = [];
+                          if (definition?.example) {
+                            collectExampleStrings(definition.example, exampleAccumulator);
+                          }
+                          if (Array.isArray(definition?.examples)) {
+                            collectExampleStrings(definition.examples, exampleAccumulator);
+                          }
+
+                          const examples = Array.from(
+                            new Set(
+                              exampleAccumulator
+                                .map((example) =>
+                                  typeof example === "string" ? example.trim() : ""
+                                )
+                                .filter(Boolean)
+                            )
+                          );
+
+                          return {
+                            definition: cleanedDefinition,
+                            example: examples[0] || "",
+                            examples,
+                          };
+                        })
+                        .filter(Boolean)
+                    : [];
+
+                  if (!definitions.length) {
+                    return null;
+                  }
+
+                  const partOfSpeech =
+                    typeof meaning.partOfSpeech === "string"
+                      ? meaning.partOfSpeech.trim()
+                      : "";
+
+                  return {
+                    partOfSpeech: partOfSpeech || "Definition",
+                    definitions,
+                  };
+                })
+                .filter(Boolean)
+            : [];
+
+          if (!meanings.length) {
+            return null;
+          }
+
+          const phonetic = extractPhoneticText(entry);
+          const attributionParts = [];
+
+          if (Array.isArray(entry.sourceUrls) && entry.sourceUrls.length) {
+            attributionParts.push(`Source: ${entry.sourceUrls[0]}`);
+          }
+
+          if (entry.license?.name) {
+            attributionParts.push(`License: ${entry.license.name}`);
+          }
+
+          const normalized = {
+            word: entry.word || term,
+            source: "FreeDictionaryAPI",
+            meanings,
+          };
+
+          if (phonetic) {
+            normalized.phonetic = phonetic;
+          }
+
+          if (attributionParts.length) {
+            normalized.note = attributionParts.join(" • ");
+          }
+
+          return normalized;
+        })
+        .filter(Boolean);
+    }
+
+    async function fetchFreeDictionaryEntries(term, parsedTerm) {
+      const lookup = parsedTerm?.term || term;
+      if (!lookup) {
+        return [];
+      }
+
+      const language = "en";
+      const url = `https://api.freedictionary.dev/api/v1/entries/${language}/${encodeURIComponent(
+        lookup
+      )}`;
+
+      let response;
+      try {
+        response = await fetch(url, {
+          headers: { Accept: "application/json" },
+        });
+      } catch (networkError) {
+        throw new Error("FreeDictionaryAPI lookup failed (network error)");
+      }
+
+      if (response.status === 404) {
+        return [];
+      }
+
+      if (!response.ok) {
+        throw new Error(`FreeDictionaryAPI lookup failed (status ${response.status})`);
+      }
+
+      const data = await response.json();
+      return normalizeFreeDictionaryEntries(data, lookup);
+    }
+
     const dictionaryProviders = {
+      dictionaryApiDev: {
+        id: "dictionaryApiDev",
+        label: "DictionaryAPI.dev",
+        fetchEntries: fetchDictionaryApiDevEntries,
+        supportsEmbeddedSearch: false,
+        defaultEnabled: true,
+        type: "definition",
+      },
+      freeDictionaryApi: {
+        id: "freeDictionaryApi",
+        label: "FreeDictionaryAPI",
+        fetchEntries: fetchFreeDictionaryEntries,
+        supportsEmbeddedSearch: false,
+        defaultEnabled: true,
+        type: "definition",
+      },
       wiktionary: {
         id: "wiktionary",
         label: "Wiktionary",
@@ -2419,10 +2725,52 @@
       return noteDetails;
     }
 
-    function mapDeckNotesToEntries(notesInfo, deckName, term) {
+    function mapDeckNotesToEntries(notesInfo, deckName, lookupContext = {}) {
       if (!Array.isArray(notesInfo)) {
         return [];
       }
+
+      const context =
+        typeof lookupContext === "object" && lookupContext !== null
+          ? lookupContext
+          : { searchTerm: lookupContext, sanitizedTerm: lookupContext };
+
+      const termCandidates = [];
+      if (context.searchTerm) {
+        termCandidates.push(context.searchTerm);
+      }
+      if (context.originalTerm) {
+        termCandidates.push(context.originalTerm);
+      }
+      if (context.term) {
+        termCandidates.push(context.term);
+      }
+      if (context.sanitizedTerm) {
+        termCandidates.push(context.sanitizedTerm);
+      }
+
+      const fallbackTermRaw =
+        (typeof context.searchTerm === "string" && context.searchTerm) ||
+        (typeof context.originalTerm === "string" && context.originalTerm) ||
+        (typeof context.term === "string" && context.term) ||
+        (typeof context.sanitizedTerm === "string" && context.sanitizedTerm) ||
+        "";
+
+      const fallbackTerm = fallbackTermRaw.replace(/\\(.)/g, "$1");
+
+      const normalizedTargets = Array.from(
+        new Set(
+          termCandidates
+            .map((candidate) => {
+              if (typeof candidate !== "string") {
+                return "";
+              }
+              const unescaped = candidate.replace(/\\(.)/g, "$1");
+              return stripHtml(unescaped).trim().toLowerCase();
+            })
+            .filter(Boolean)
+        )
+      );
 
       return notesInfo
         .map((note) => {
@@ -2432,14 +2780,21 @@
           }
 
           const definitionText = noteDetails.display.backText || "(Back field is empty)";
+          const headwordText = noteDetails.display.frontText || "";
+          const normalizedHeadword = headwordText.trim().toLowerCase();
+          const headwordMatch =
+            normalizedHeadword && normalizedTargets.length
+              ? normalizedTargets.includes(normalizedHeadword)
+              : false;
 
           return {
             uniqueKey: `note-${noteDetails.id}`,
-            word: noteDetails.display.frontText || term,
+            word: noteDetails.display.frontText || fallbackTerm,
             source: deckName,
             deckName,
             isExistingNote: true,
             noteDetails,
+            headwordMatch,
             meanings: [
               {
                 partOfSpeech: noteDetails.modelName || "Card content",
@@ -2585,7 +2940,10 @@
 
         const limitedNoteIds = noteIds.slice(0, NOTE_SEARCH_LIMIT);
         const notesInfo = await callAnkiConnect("notesInfo", { notes: limitedNoteIds });
-        const entries = mapDeckNotesToEntries(notesInfo, deckName, sanitizedTerm || term);
+        const entries = mapDeckNotesToEntries(notesInfo, deckName, {
+          searchTerm: term,
+          sanitizedTerm: sanitizedTerm || term,
+        });
 
         return {
           deckName,
@@ -3305,36 +3663,82 @@
         return;
       }
 
-
       setStatus(`Searching online dictionaries and decks for "${parsedTerm.term}"…`);
       searchButton.disabled = true;
       dictionaryResults.textContent = "Searching…";
 
       const uniqueEntryKeys = new Set();
-      const collectedEntries = [];
       const contributingProviders = new Set();
       const providerErrors = [];
       let deckLookupSummaries = [];
 
+      const onlineEntries = [];
+      const deckEntries = [];
+
+      const deckEntryComparator = (a, b) => {
+        const aMatch = a.headwordMatch ? 1 : 0;
+        const bMatch = b.headwordMatch ? 1 : 0;
+        if (aMatch !== bMatch) {
+          return bMatch - aMatch;
+        }
+        const aOrder = typeof a._insertionOrder === "number" ? a._insertionOrder : 0;
+        const bOrder = typeof b._insertionOrder === "number" ? b._insertionOrder : 0;
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
+        const aWord = typeof a.word === "string" ? a.word.toLowerCase() : "";
+        const bWord = typeof b.word === "string" ? b.word.toLowerCase() : "";
+        if (aWord && bWord && aWord !== bWord) {
+          return aWord.localeCompare(bWord);
+        }
+        const aKey = typeof a.uniqueKey === "string" ? a.uniqueKey : "";
+        const bKey = typeof b.uniqueKey === "string" ? b.uniqueKey : "";
+        return aKey.localeCompare(bKey);
+      };
+
+      const getCombinedEntries = () => {
+        if (!deckEntries.length) {
+          return onlineEntries.slice();
+        }
+        const sortedDeckEntries = deckEntries.slice().sort(deckEntryComparator);
+        return [...onlineEntries, ...sortedDeckEntries];
+      };
+
+      const refreshCombinedResults = () => {
+        const combined = getCombinedEntries();
+        if (combined.length) {
+          renderDictionaryResults(combined, parsedTerm);
+        }
+      };
+
       const addEntries = (entries, providerLabel = "", options = {}) => {
-        const { prepend = false, trackProvider = true } = options;
+        const { trackProvider = true, category = "online", skipPosFilter = false } = options;
         if (!Array.isArray(entries)) {
           return;
         }
 
-        const iterable = prepend ? [...entries].reverse() : entries;
+        let appended = false;
 
-        iterable.forEach((entry) => {
+        entries.forEach((entry) => {
           if (!entry || !Array.isArray(entry.meanings) || !entry.meanings.length) {
             return;
           }
 
-          const key = entry.uniqueKey
-            ? entry.uniqueKey
+          let workingEntry = entry;
+          if (!skipPosFilter && parsedTerm.partOfSpeech) {
+            const filtered = filterEntryByPartOfSpeech(entry, parsedTerm.partOfSpeech);
+            if (!filtered) {
+              return;
+            }
+            workingEntry = filtered;
+          }
+
+          const key = workingEntry.uniqueKey
+            ? workingEntry.uniqueKey
             : JSON.stringify({
-                source: entry.source || providerLabel || "",
-                word: entry.word || "",
-                meanings: (entry.meanings || []).map((meaning) => ({
+                source: workingEntry.source || providerLabel || "",
+                word: workingEntry.word || "",
+                meanings: (workingEntry.meanings || []).map((meaning) => ({
                   partOfSpeech: meaning.partOfSpeech || "",
                   definitions: (meaning.definitions || []).map((definition) => ({
                     definition: definition.definition || "",
@@ -3348,19 +3752,30 @@
           }
           uniqueEntryKeys.add(key);
 
-          if (prepend) {
-            collectedEntries.unshift(entry);
-          } else {
-            collectedEntries.push(entry);
+          const entryToAdd = { ...workingEntry };
+          if (!entryToAdd.source && providerLabel) {
+            entryToAdd.source = providerLabel;
           }
 
+          if (category === "deck") {
+            entryToAdd._insertionOrder = deckEntries.length;
+            deckEntries.push(entryToAdd);
+          } else {
+            onlineEntries.push(entryToAdd);
+          }
+          appended = true;
+
           if (trackProvider) {
-            const contributor = entry.source || providerLabel;
+            const contributor = entryToAdd.source || providerLabel;
             if (contributor) {
               contributingProviders.add(contributor);
             }
           }
         });
+
+        if (appended) {
+          refreshCombinedResults();
+        }
       };
 
       try {
@@ -3375,7 +3790,6 @@
             })
             .then((entries) => {
               addEntries(entries, provider.label || provider.id);
-              renderDictionaryResults(collectedEntries, parsedTerm);
             })
             .catch((error) => {
               console.warn(
@@ -3394,12 +3808,12 @@
             deckLookupSummaries.forEach((summary) => {
               if (Array.isArray(summary.entries) && summary.entries.length) {
                 addEntries(summary.entries, summary.deckName || "Existing cards", {
-                  prepend: true,
+                  category: "deck",
                   trackProvider: false,
+                  skipPosFilter: true,
                 });
               }
             });
-            renderDictionaryResults(collectedEntries, parsedTerm);
             return deckLookupSummaries;
           })
           .catch((error) => {
@@ -3413,13 +3827,14 @@
               error: error?.message || "Deck lookup failed.",
             };
             deckLookupSummaries = [failureSummary];
-            renderDictionaryResults(collectedEntries, parsedTerm);
             return deckLookupSummaries;
           });
 
         await Promise.allSettled([...providerPromises, deckLookupPromise]);
 
-        if (!collectedEntries.length) {
+        const combinedEntries = getCombinedEntries();
+
+        if (!combinedEntries.length) {
           renderDictionaryResults([], parsedTerm);
           let emptyMessage = "No entries available.";
           deckLookupSummaries.forEach((summary) => {
@@ -3434,7 +3849,7 @@
           return;
         }
 
-        renderDictionaryResults(collectedEntries, parsedTerm);
+        renderDictionaryResults(combinedEntries, parsedTerm);
 
         const statusParts = [];
         const providerList = Array.from(contributingProviders);
