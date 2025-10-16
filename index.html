@@ -849,7 +849,6 @@
         <label for="model-name">Note Type</label>
         <input type="text" id="model-name" value="Basic" list="model-suggestions" />
         <datalist id="model-suggestions"></datalist>
-        <input type="text" id="tags" />
       </section>
     </aside>
   </div>
@@ -1323,24 +1322,26 @@
       passwordInput.value = savedCredentials.password;
     }
 
-    [frontField, backField, exampleField, tagsInput].forEach((element) => {
-      element.addEventListener("input", () => {
-        if (element === frontField) {
-          refreshMaskedWordField();
-        }
-        if (element?.tagName === "TEXTAREA") {
-          adjustTextareaHeight(element);
-        }
+    [frontField, backField, exampleField, tagsInput]
+      .filter(Boolean)
+      .forEach((element) => {
+        element.addEventListener("input", () => {
+          if (element === frontField) {
+            refreshMaskedWordField();
+          }
+          if (element?.tagName === "TEXTAREA") {
+            adjustTextareaHeight(element);
+          }
+        });
+        element.addEventListener("change", () => {
+          if (element === frontField) {
+            refreshMaskedWordField();
+          }
+          if (element?.tagName === "TEXTAREA") {
+            adjustTextareaHeight(element);
+          }
+        });
       });
-      element.addEventListener("change", () => {
-        if (element === frontField) {
-          refreshMaskedWordField();
-        }
-        if (element?.tagName === "TEXTAREA") {
-          adjustTextareaHeight(element);
-        }
-      });
-    });
 
     [frontField, backField, exampleField].forEach((textarea) => {
       adjustTextareaHeight(textarea);
@@ -2710,143 +2711,14 @@
 
       updateNoteDetailsDisplay(noteDetails);
 
-      if (Array.isArray(noteDetails.tags)) {
-        tagsInput.value = noteDetails.tags.join(", ");
-      } else {
-        tagsInput.value = "";
-      }
-
-    }
-
-    async function updateExistingNoteFromEditor(noteDetails) {
-      if (!noteDetails || !noteDetails.id) {
-        throw new Error("This note cannot be updated.");
-      }
-
-      const updateFields = {};
-      const processed = new Set();
-
-      const collectFieldValue = (fieldName) => {
-        if (!fieldName || processed.has(fieldName)) {
-          return;
-        }
-        const editor = fieldEditors.get(fieldName);
-        if (!editor) {
-          return;
-        }
-        updateFields[fieldName] = editor.value.trim();
-        processed.add(fieldName);
-      };
-
-      if (Array.isArray(noteDetails.orderedFields)) {
-        noteDetails.orderedFields.forEach((entry) => collectFieldValue(entry.name));
-      }
-
-      fieldEditors.forEach((_, fieldName) => collectFieldValue(fieldName));
-
-      const roleMap = noteDetails.roleMap || activeModelFieldMetadata.roleMap || {};
-      const wordFieldName =
-        roleMap.word ||
-        (Array.isArray(noteDetails.orderedFields) && noteDetails.orderedFields.length
-          ? noteDetails.orderedFields[0].name
-          : getActiveWordFieldName());
-      const maskedFieldName = roleMap.masked || activeModelFieldMetadata.roleMap?.masked;
-
-      if (wordFieldName) {
-        const wordEditor = fieldEditors.get(wordFieldName);
-        const existingWordValue =
-          typeof (noteDetails.fields || {})[wordFieldName] === "string"
-            ? noteDetails.fields[wordFieldName].trim()
-            : "";
-        const wordValue = wordEditor ? wordEditor.value.trim() : existingWordValue;
-        updateFields[wordFieldName] = wordValue;
-
-        if (maskedFieldName) {
-          const maskedValue = deriveMaskedWordValue(wordValue);
-          updateFields[maskedFieldName] = maskedValue;
-          const maskedEditor = fieldEditors.get(maskedFieldName);
-          if (maskedEditor) {
-            maskedEditor.value = maskedValue;
-            adjustTextareaHeight(maskedEditor);
-          }
+      if (tagsInput) {
+        if (Array.isArray(noteDetails.tags)) {
+          tagsInput.value = noteDetails.tags.join(", ");
+        } else {
+          tagsInput.value = "";
         }
       }
 
-      const fieldNames = Object.keys(updateFields);
-      if (!fieldNames.length) {
-        throw new Error("No mapped fields available for update.");
-      }
-
-      await callAnkiConnect("updateNoteFields", {
-        note: {
-          id: noteDetails.id,
-          fields: updateFields,
-        },
-      });
-
-      const fields = noteDetails.fields || {};
-      fieldNames.forEach((fieldName) => {
-        fields[fieldName] = updateFields[fieldName];
-      });
-      noteDetails.fields = fields;
-      noteDetails.roleMap = roleMap;
-
-      if (Array.isArray(noteDetails.orderedFields)) {
-        fieldNames.forEach((fieldName) => {
-          const existing = noteDetails.orderedFields.find((entry) => entry && entry.name === fieldName);
-          if (existing) {
-            existing.value = updateFields[fieldName];
-          } else {
-            noteDetails.orderedFields.push({
-              name: fieldName,
-              value: updateFields[fieldName],
-              order: noteDetails.orderedFields.length,
-            });
-          }
-        });
-      }
-
-      updateNoteDetailsDisplay(noteDetails);
-      refreshMaskedWordField();
-    }
-
-    async function copyExistingNoteToDeck(noteDetails, deckName, additionalTags = []) {
-      if (!noteDetails || !noteDetails.fields) {
-        throw new Error("This note cannot be copied.");
-      }
-
-      if (!deckName) {
-        throw new Error("Please choose a deck before copying.");
-      }
-
-      const modelName = noteDetails.modelName || activeModelFieldMetadata.modelName || "";
-      if (!modelName) {
-        throw new Error("Unable to determine the note type for this card.");
-      }
-
-      const fields = {};
-      Object.entries(noteDetails.fields).forEach(([fieldName, value]) => {
-        fields[fieldName] = typeof value === "string" ? value : "";
-      });
-
-      const baseTags = Array.isArray(noteDetails.tags) ? noteDetails.tags : [];
-      const extraTags = Array.isArray(additionalTags) ? additionalTags : [];
-      const mergedTags = Array.from(
-        new Set(
-          [...baseTags, ...extraTags]
-            .map((tag) => (tag || "").trim())
-            .filter(Boolean)
-        )
-      );
-
-      await callAnkiConnect("addNote", {
-        note: {
-          deckName,
-          modelName,
-          fields,
-          tags: mergedTags,
-        },
-      });
     }
 
     function createMaskFromMatch(match) {
@@ -3155,17 +3027,7 @@
       if (entry.isExistingNote && entry.noteDetails) {
         const actions = document.createElement("div");
         actions.className = "entry-actions";
-
-        const loadButton = document.createElement("button");
-        loadButton.textContent = "Load this card";
-        loadButton.addEventListener("click", () => {
-          applyNoteToEditor(entry.noteDetails);
-          const deckLabel = entry.noteDetails.deckName
-            ? ` from "${entry.noteDetails.deckName}"`
-            : "";
-          setStatus(`Existing card loaded${deckLabel}.`, "success");
-        });
-        actions.appendChild(loadButton);
+        let hasActions = false;
 
         const sanitizedNoteWord = sanitizeDictionaryText(
           (entry.noteDetails.display && entry.noteDetails.display.frontText) ||
@@ -3188,8 +3050,9 @@
         if (sanitizedNoteDefinition && backField) {
           const useDefinitionButton = document.createElement("button");
           useDefinitionButton.type = "button";
-          useDefinitionButton.textContent = "Use definition";
+          useDefinitionButton.textContent = "Use this definition";
           useDefinitionButton.addEventListener("click", () => {
+            applyNoteToEditor(entry.noteDetails);
             const targetWord = resolveMaskTarget();
             const maskedDefinition = maskTargetInText(sanitizedNoteDefinition, targetWord);
             backField.value = maskedDefinition;
@@ -3199,84 +3062,30 @@
               adjustTextareaHeight(frontField);
             }
             refreshMaskedWordField();
-            setStatus("Definition added from existing card.", "success");
+            setStatus("Definition added from existing card. Ready to create a new card.", "success");
           });
           actions.appendChild(useDefinitionButton);
+          hasActions = true;
         }
 
         if (sanitizedNoteExample && exampleField) {
           const useExampleButton = document.createElement("button");
           useExampleButton.type = "button";
-          useExampleButton.textContent = "Use example";
+          useExampleButton.textContent = "Use this example";
           useExampleButton.addEventListener("click", () => {
+            applyNoteToEditor(entry.noteDetails);
             const targetWord = resolveMaskTarget();
             const maskedExample = maskTargetInText(sanitizedNoteExample, targetWord);
             exampleField.value = maskedExample;
             adjustTextareaHeight(exampleField);
-            setStatus("Example added from existing card.", "success");
+            setStatus("Example added from existing card. Ready to create a new card.", "success");
           });
           actions.appendChild(useExampleButton);
+          hasActions = true;
         }
-
-        const copyButton = document.createElement("button");
-        copyButton.type = "button";
-        copyButton.textContent = "Copy to current deck";
-        copyButton.addEventListener("click", async () => {
-          const targetDeckName = deckSelect.value;
-          if (!targetDeckName) {
-            setStatus("Please choose a deck before copying.", "error");
-            deckSelect.focus();
-            return;
-          }
-
-          try {
-            setStatus(`Copying card to "${targetDeckName}"…`);
-            copyButton.disabled = true;
-            await copyExistingNoteToDeck(entry.noteDetails, targetDeckName, parseTagsFromInput());
-            try {
-              await callAnkiConnect("sync");
-              setStatus(
-                `Copied card to "${targetDeckName}" and sync requested using Anki's saved session.`,
-                "success"
-              );
-            } catch (syncError) {
-              console.warn("Sync failed", syncError);
-              setStatus(
-                `Copied card to "${targetDeckName}" but sync failed via saved session: ${syncError.message}`,
-                "error"
-              );
-            }
-          } catch (error) {
-            console.error(error);
-            setStatus(error.message || "Failed to copy card", "error");
-          } finally {
-            copyButton.disabled = false;
-          }
-        });
-        actions.appendChild(copyButton);
-
-        const updateButton = document.createElement("button");
-        updateButton.textContent = "Update card";
-        updateButton.addEventListener("click", async () => {
-          try {
-            setStatus("Updating existing card…");
-            updateButton.disabled = true;
-            await updateExistingNoteFromEditor(entry.noteDetails);
-            if (entry.noteDetails.display?.frontText) {
-              entry.word = entry.noteDetails.display.frontText;
-              headword.textContent = entry.word;
-            }
-            setStatus("Existing card updated.", "success");
-          } catch (error) {
-            console.error(error);
-            setStatus(error.message || "Failed to update note", "error");
-          } finally {
-            updateButton.disabled = false;
-          }
-        });
-        actions.appendChild(updateButton);
-
-        content.appendChild(actions);
+        if (hasActions) {
+          content.appendChild(actions);
+        }
       }
 
       (entry.meanings || []).forEach((meaning) => {
