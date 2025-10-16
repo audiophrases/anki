@@ -141,6 +141,15 @@
       padding-right: clamp(3.25rem, 5vw, 4rem);
     }
 
+    .app.is-note-collapsed.is-settings-collapsed {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .app.is-note-collapsed.is-settings-collapsed .main {
+      padding-left: clamp(3.25rem, 5vw, 4rem);
+      padding-right: clamp(3.25rem, 5vw, 4rem);
+    }
+
     .sidebar-toggle {
       width: 2.5rem;
       height: 2.5rem;
@@ -421,79 +430,20 @@
 
     .dictionary-controls {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 0.75rem;
       align-items: center;
-    }
-
-    .dictionary-scope {
-      background: rgba(63, 100, 199, 0.12);
-      color: #2a3d82;
-      border-radius: 999px;
-      padding: 0.45rem 1rem;
-      font-weight: 600;
-      white-space: nowrap;
     }
 
     .dictionary-settings {
       margin-top: 1rem;
       display: grid;
-      gap: 1rem;
+      gap: 0.75rem;
     }
 
-    .dictionary-helper {
-      margin: 0.35rem 0 0;
-      font-size: 0.85rem;
-      color: #4a5b8d;
-    }
-
-    .scope-toggle {
-      display: inline-flex;
-      background: rgba(63, 100, 199, 0.1);
-      border-radius: 999px;
-      padding: 0.2rem;
-      gap: 0.2rem;
-      flex-wrap: wrap;
-    }
-
-    .scope-toggle button {
-      background: transparent;
-      border-radius: 999px;
-      padding: 0.45rem 0.95rem;
-      border: none;
-      color: #2a3d82;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s ease, color 0.15s ease;
-    }
-
-    .scope-toggle button.is-active {
-      background: #3f64c7;
-      color: white;
-    }
-
-    .dictionary-provider-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 0.5rem;
-    }
-
-    .provider-option {
-      background: rgba(63, 100, 199, 0.08);
-      border: 1px solid rgba(63, 100, 199, 0.14);
-      border-radius: 12px;
-      padding: 0.55rem 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      font-weight: 500;
-      color: #2a3d82;
-    }
-
-    .provider-option input[type="checkbox"] {
-      width: 1rem;
-      height: 1rem;
-      margin: 0;
+    .dictionary-settings label {
+      display: block;
+      margin-bottom: 0.4rem;
     }
 
     .dictionary-results {
@@ -502,25 +452,6 @@
       margin-top: 1rem;
     }
 
-    .suggestions {
-      margin-top: 0.5rem;
-      font-size: 0.95rem;
-      color: #2f4075;
-      display: flex;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .suggestions button {
-      background: rgba(63, 100, 199, 0.15);
-      color: #2a3d82;
-      border-radius: 999px;
-      border: none;
-      padding: 0.3rem 0.75rem;
-      cursor: pointer;
-      font-weight: 600;
-    }
 
     .definition-entry {
       border: 1px solid rgba(63, 100, 199, 0.18);
@@ -654,22 +585,6 @@
 
     .example-item button {
       justify-self: start;
-    }
-
-    .synonym-cloud {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .synonym-cloud button {
-      background: rgba(63, 100, 199, 0.15);
-      border: none;
-      border-radius: 999px;
-      padding: 0.35rem 0.8rem;
-      font-weight: 600;
-      color: #2a3d82;
-      cursor: pointer;
     }
 
     .status {
@@ -882,33 +797,18 @@
       </section>
 
       <section class="panel" id="dictionary-panel">
-        <h2>Dictionary Lookup</h2>
         <div class="dictionary-controls">
           <input type="text" id="lookup-term" placeholder="Search term" />
           <button id="search-dictionary">Search</button>
         </div>
         <div class="dictionary-settings">
           <div>
-            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Search scope</p>
-            <div class="scope-toggle" role="group" aria-label="Search scope">
-              <button type="button" class="is-active" data-scope="online-decks">Online + decks</button>
-              <button type="button" data-scope="online-only">Online only</button>
-              <button type="button" data-scope="decks-only">Decks only</button>
-            </div>
-          </div>
-          <div>
-            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Dictionaries</p>
-            <div class="dictionary-provider-grid" id="dictionary-provider-grid"></div>
-          </div>
-          <div>
-            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Existing cards deck</p>
+            <label for="existing-deck-select" style="font-weight: 600; color: #2f4075;">Existing cards deck</label>
             <select id="existing-deck-select">
               <option value="current" selected>Current deck</option>
             </select>
-            <p class="dictionary-helper">Look in another deck to load or copy an existing card.</p>
           </div>
         </div>
-        <div class="suggestions" id="spelling-suggestions" hidden></div>
         <div class="dictionary-results" id="dictionary-results"></div>
       </section>
     </main>
@@ -956,8 +856,7 @@
       <section>
         <p style="margin-top: 0; font-weight: 600;">Dictionary resources</p>
         <p style="font-size: 0.85rem; line-height: 1.5; color: rgba(255, 255, 255, 0.9);">
-          Built-in lookups use Wiktionary and Datamuse for synonyms—no API keys required. Enable or
-          disable providers from the dictionary panel to customise results.
+          Built-in lookups use Wiktionary—no API keys required.
         </p>
       </section>
     </aside>
@@ -968,10 +867,8 @@
     const loadDecksBtn = document.getElementById("load-decks");
     const lookupTermInput = document.getElementById("lookup-term");
     const searchButton = document.getElementById("search-dictionary");
-    const dictionaryProviderGrid = document.getElementById("dictionary-provider-grid");
     const dictionaryResults = document.getElementById("dictionary-results");
     const existingDeckSelect = document.getElementById("existing-deck-select");
-    const spellingSuggestions = document.getElementById("spelling-suggestions");
     const frontField = document.getElementById("front-field");
     const backField = document.getElementById("back-field");
     const exampleField = document.getElementById("example-field");
@@ -986,7 +883,6 @@
     const modelSuggestions = document.getElementById("model-suggestions");
     const tagsInput = document.getElementById("tags");
     const setupNotice = document.getElementById("setup-notice");
-    const scopeToggleButtons = document.querySelectorAll(".scope-toggle button");
     const appContainer = document.querySelector(".app");
     const noteSidebar = document.getElementById("note-sidebar");
     const settingsSidebar = document.getElementById("settings-sidebar");
@@ -1016,8 +912,6 @@
     };
 
     const LOCAL_STORAGE_KEYS = {
-      providerSelection: "anki.dictionary.providers",
-      searchScope: "anki.dictionary.scope",
       noteSidebarCollapsed: "anki.ui.noteSidebarCollapsed",
       settingsSidebarCollapsed: "anki.ui.settingsSidebarCollapsed",
     };
@@ -1026,12 +920,6 @@
     const NOTE_SAMPLE_BATCH_SIZE = 200;
     const NOTE_SAMPLE_BATCH_LIMIT = 5;
     const NOTE_SEARCH_LIMIT = 25;
-    const SEARCH_SCOPES = {
-      onlineDecks: "online-decks",
-      onlineOnly: "online-only",
-      decksOnly: "decks-only",
-    };
-
     const modelFieldCache = new Map();
     const pendingModelFieldRequests = new Map();
     let modelFieldLoadToken = 0;
@@ -1079,22 +967,6 @@
 
     let userModifiedNoteType = false;
     let pendingNoteTypeDeck = "";
-    const providerSelectionRaw = safeParseJSON(
-      getLocalStorageItem(LOCAL_STORAGE_KEYS.providerSelection),
-      []
-    );
-    let activeSearchScope =
-      getLocalStorageItem(LOCAL_STORAGE_KEYS.searchScope) || "online-decks";
-
-    const activeProviderSelection = new Set(
-      Array.isArray(providerSelectionRaw) ? providerSelectionRaw : []
-    );
-
-    if (!Object.values(SEARCH_SCOPES).includes(activeSearchScope)) {
-      activeSearchScope = SEARCH_SCOPES.onlineDecks;
-    }
-
-    let lastPartOfSpeechFilter = "";
 
     function safeParseJSON(value, fallback = null) {
       if (!value) {
@@ -1382,115 +1254,6 @@
       return {};
     }
 
-    function persistProviderSelection() {
-      const ids = Array.from(activeProviderSelection);
-      if (!ids.length) {
-        setLocalStorageItem(LOCAL_STORAGE_KEYS.providerSelection, null);
-        return;
-      }
-      setLocalStorageItem(LOCAL_STORAGE_KEYS.providerSelection, JSON.stringify(ids));
-    }
-
-    function getActiveDictionaryProviderIds() {
-      if (activeProviderSelection.size) {
-        return Array.from(activeProviderSelection).filter(
-          (id) => !!dictionaryProviders[id]
-        );
-      }
-
-      return Object.values(dictionaryProviders)
-        .filter((provider) => provider?.defaultEnabled !== false)
-        .map((provider) => provider.id);
-    }
-
-    function updateDictionaryScopeLabel(partOfSpeechLabel = lastPartOfSpeechFilter) {
-      lastPartOfSpeechFilter = partOfSpeechLabel || "";
-    }
-
-    function setSearchScope(scope) {
-      if (!scope || activeSearchScope === scope) {
-        updateDictionaryScopeLabel();
-        return;
-      }
-
-      activeSearchScope = scope;
-      setLocalStorageItem(LOCAL_STORAGE_KEYS.searchScope, scope);
-
-      scopeToggleButtons.forEach((button) => {
-        button.classList.toggle("is-active", button.dataset.scope === scope);
-      });
-
-      updateDictionaryScopeLabel();
-    }
-
-    function initializeScopeButtons() {
-      scopeToggleButtons.forEach((button) => {
-        const scope = button.dataset.scope;
-        button.classList.toggle("is-active", scope === activeSearchScope);
-        button.addEventListener("click", () => {
-          setSearchScope(scope);
-        });
-      });
-    }
-
-    function initializeDictionaryProviderOptions() {
-      if (!dictionaryProviderGrid) {
-        return;
-      }
-
-      dictionaryProviderGrid.innerHTML = "";
-
-      const defaultsAdded = new Set();
-
-      Object.values(dictionaryProviders).forEach((provider) => {
-        if (!provider || provider.hidden) {
-          return;
-        }
-
-        const option = document.createElement("label");
-        option.className = "provider-option";
-
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.value = provider.id;
-
-        let isSelected = activeProviderSelection.has(provider.id);
-        if (!activeProviderSelection.size && provider.defaultEnabled !== false) {
-          isSelected = true;
-          defaultsAdded.add(provider.id);
-        }
-
-        checkbox.checked = isSelected;
-        if (isSelected) {
-          activeProviderSelection.add(provider.id);
-        }
-
-        checkbox.addEventListener("change", () => {
-          if (checkbox.checked) {
-            activeProviderSelection.add(provider.id);
-          } else {
-            activeProviderSelection.delete(provider.id);
-          }
-          persistProviderSelection();
-          updateDictionaryScopeLabel();
-        });
-
-        option.appendChild(checkbox);
-
-        const labelText = document.createElement("span");
-        labelText.textContent = provider.label || provider.id;
-        option.appendChild(labelText);
-
-        dictionaryProviderGrid.appendChild(option);
-      });
-
-      if (defaultsAdded.size) {
-        persistProviderSelection();
-      }
-
-      updateDictionaryScopeLabel();
-    }
-
     function persistCredentials() {
       const username = usernameInput.value.trim();
       const password = passwordInput.value;
@@ -1767,7 +1530,78 @@
         return [];
       }
 
-      const englishEntries = Array.isArray(payload.en) ? payload.en : [];
+      let englishEntries = Array.isArray(payload.en) ? payload.en : [];
+
+      if (!englishEntries.length && Array.isArray(payload.definitions)) {
+        englishEntries = payload.definitions
+          .filter((entry) => {
+            const language = entry?.language || entry?.lang;
+            return (
+              !language ||
+              (typeof language === "string" && language.toLowerCase().startsWith("en"))
+            );
+          })
+          .map((entry) => {
+            const definitionPool = Array.isArray(entry.definitions)
+              ? entry.definitions
+              : Array.isArray(entry.senses)
+              ? entry.senses
+              : Array.isArray(entry.text)
+              ? entry.text
+              : [entry];
+
+            return {
+              partOfSpeech:
+                entry.partOfSpeech || entry.part_of_speech || entry.pos || entry.lexicalCategory || "",
+              definitions: definitionPool,
+            };
+          });
+      }
+
+      if (!englishEntries.length && Array.isArray(payload.items)) {
+        englishEntries = payload.items
+          .filter((item) => {
+            const language = item?.language || item?.lang;
+            return (
+              !language ||
+              (typeof language === "string" && language.toLowerCase().startsWith("en"))
+            );
+          })
+          .map((item) => {
+            const senses = Array.isArray(item.senses)
+              ? item.senses
+              : Array.isArray(item.entries)
+              ? item.entries
+              : [];
+
+            const definitionPool = [];
+            senses.forEach((sense) => {
+              if (Array.isArray(sense.definitions)) {
+                definitionPool.push(...sense.definitions);
+              } else {
+                definitionPool.push(sense);
+              }
+            });
+
+            if (!definitionPool.length && Array.isArray(item.definitions)) {
+              definitionPool.push(...item.definitions);
+            }
+
+            if (!definitionPool.length && Array.isArray(item.text)) {
+              definitionPool.push(...item.text);
+            }
+
+            if (!definitionPool.length) {
+              definitionPool.push(item);
+            }
+
+            return {
+              partOfSpeech: item.partOfSpeech || item.pos || item.lexicalCategory || "",
+              definitions: definitionPool,
+            };
+          });
+      }
+
       if (!englishEntries.length) {
         return [];
       }
@@ -1868,20 +1702,110 @@
       ];
     }
 
-    async function fetchWiktionaryRestEntries(term, parsedTerm) {
-      const lookup = parsedTerm?.term || term;
-      if (!lookup) {
+    function parseWiktionaryHtmlToEntries(html, term) {
+      if (!html || typeof DOMParser === "undefined") {
         return [];
       }
 
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      if (!doc) {
+        return [];
+      }
+
+      const englishHeader = Array.from(doc.querySelectorAll("h2")).find((header) => {
+        const headline = header.querySelector(".mw-headline");
+        return headline && headline.textContent?.trim().toLowerCase() === "english";
+      });
+
+      if (!englishHeader) {
+        return [];
+      }
+
+      const sections = [];
+      let currentHeading = "";
+      let pendingDefinitions = [];
+
+      const flushSection = () => {
+        if (!pendingDefinitions.length) {
+          return;
+        }
+        const normalized = normalizeDefinitions(pendingDefinitions);
+        pendingDefinitions = [];
+        if (!normalized.length) {
+          return;
+        }
+        const canonical = canonicalizePartOfSpeech(currentHeading);
+        const label = canonical
+          ? canonical.charAt(0).toUpperCase() + canonical.slice(1)
+          : currentHeading || "Definition";
+        sections.push({
+          partOfSpeech: label,
+          definitions: normalized,
+        });
+      };
+
+      let node = englishHeader.nextElementSibling;
+      while (node && node.tagName !== "H2") {
+        if (/^H[3-4]$/.test(node.tagName)) {
+          flushSection();
+          const headline = node.querySelector(".mw-headline");
+          currentHeading = (headline ? headline.textContent : node.textContent || "").trim();
+        } else if (node.tagName === "OL") {
+          const items = Array.from(node.querySelectorAll(":scope > li"));
+          items.forEach((item) => {
+            const clone = item.cloneNode(true);
+            clone.querySelectorAll("ol, ul, dl, table, div").forEach((child) => child.remove());
+            const definitionText = clone.textContent
+              .replace(/\s+/g, " ")
+              .replace(/\[[^\]]*\]/g, "")
+              .trim();
+            if (!definitionText) {
+              return;
+            }
+            const examples = Array.from(item.querySelectorAll("ul li"))
+              .map((exampleNode) =>
+                exampleNode.textContent
+                  .replace(/\s+/g, " ")
+                  .replace(/\[[^\]]*\]/g, "")
+                  .trim()
+              )
+              .filter(Boolean);
+            pendingDefinitions.push({
+              definition: definitionText,
+              example: examples[0] || "",
+              examples,
+            });
+          });
+        }
+        node = node.nextElementSibling;
+      }
+
+      flushSection();
+
+      if (!sections.length) {
+        return [];
+      }
+
+      return [
+        {
+          word: term,
+          source: "Wiktionary",
+          meanings: sections,
+        },
+      ];
+    }
+
+    async function fetchWiktionaryHtmlEntries(term) {
+      const url =
+        `https://en.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(term)}` +
+        "&prop=text&format=json&formatversion=2&origin=*";
+
       let response;
       try {
-        response = await fetch(
-          `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(lookup)}`,
-          {
-            headers: { Accept: "application/json" },
-          }
-        );
+        response = await fetch(url, {
+          headers: { Accept: "application/json" },
+        });
       } catch (networkError) {
         throw new Error("Wiktionary lookup failed (network error)");
       }
@@ -1895,62 +1819,58 @@
       }
 
       const data = await response.json();
-      return normalizeWiktionaryRestEntries(data, lookup);
-    }
-
-    async function fetchSynonymEntries(term, parsedTerm) {
-      const queryTerm = parsedTerm?.term || term;
-      const response = await fetch(
-        `https://api.datamuse.com/words?rel_syn=${encodeURIComponent(queryTerm)}&max=30`
-      );
-
-      if (!response.ok) {
-        throw new Error("Synonym lookup failed");
-      }
-
-      const data = await response.json();
-      const synonyms = Array.isArray(data)
-        ? data
-            .map((item) => (typeof item === "string" ? item : item?.word))
-            .filter(Boolean)
-        : [];
-
-      if (!synonyms.length) {
+      if (data?.error?.code === "missingtitle") {
         return [];
       }
 
-      return [
-        {
-          word: queryTerm,
-          source: "Synonyms",
-          isSynonymList: true,
-          synonyms,
-        },
+      const html = data?.parse?.text;
+      if (!html) {
+        return [];
+      }
+
+      return parseWiktionaryHtmlToEntries(html, term);
+    }
+
+    async function fetchWiktionaryRestEntries(term, parsedTerm) {
+      const lookup = parsedTerm?.term || term;
+      if (!lookup) {
+        return [];
+      }
+      const endpoints = [
+        `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(lookup)}?redirect=true&origin=*`,
+        `https://en.wiktionary.org/api/rest_v1/page/definition/en/${encodeURIComponent(lookup)}?redirect=true&origin=*`,
       ];
-    }
 
-    async function fetchSpellingSuggestions(term) {
-      if (!term) {
-        return [];
-      }
+      for (let index = 0; index < endpoints.length; index += 1) {
+        const endpoint = endpoints[index];
+        try {
+          const response = await fetch(endpoint, {
+            headers: { Accept: "application/json" },
+          });
 
-      try {
-        const response = await fetch(
-          `https://api.datamuse.com/sug?s=${encodeURIComponent(term)}&max=6`
-        );
-        if (!response.ok) {
-          return [];
+          if (response.status === 404) {
+            continue;
+          }
+
+          if (!response.ok) {
+            throw new Error(`Wiktionary lookup failed (status ${response.status})`);
+          }
+
+          const data = await response.json();
+          const normalized = normalizeWiktionaryRestEntries(data, lookup);
+          if (normalized.length) {
+            return normalized;
+          }
+        } catch (error) {
+          if (index === endpoints.length - 1) {
+            console.warn("Primary Wiktionary lookup failed", error);
+          } else {
+            continue;
+          }
         }
-        const data = await response.json();
-        return Array.isArray(data)
-          ? data
-              .map((item) => (typeof item === "string" ? item : item?.word))
-              .filter(Boolean)
-          : [];
-      } catch (error) {
-        console.warn("Spelling suggestion lookup failed", error);
-        return [];
       }
+
+      return fetchWiktionaryHtmlEntries(lookup);
     }
 
     const dictionaryProviders = {
@@ -1962,84 +1882,9 @@
         defaultEnabled: true,
         type: "definition",
       },
-      synonyms: {
-        id: "synonyms",
-        label: "Synonyms",
-        fetchEntries: fetchSynonymEntries,
-        supportsEmbeddedSearch: false,
-        defaultEnabled: true,
-        type: "synonym",
-      },
     };
 
     initializeSidebarToggles();
-    initializeScopeButtons();
-    initializeDictionaryProviderOptions();
-
-    async function searchWithinEntries(parsedTerm, providerId, credentials = {}) {
-      const provider = dictionaryProviders[providerId];
-      if (!provider || !provider.supportsEmbeddedSearch) {
-        return [];
-      }
-
-      const tokens = Array.isArray(parsedTerm?.tokens) && parsedTerm.tokens.length
-        ? parsedTerm.tokens
-        : (parsedTerm?.term || "")
-            .split(/\s+/)
-            .map((token) => token.trim())
-            .filter(Boolean);
-
-      const seenTokens = new Set();
-      const aggregated = [];
-
-      for (const token of tokens) {
-        const normalizedToken = token.toLowerCase();
-        if (!normalizedToken || seenTokens.has(normalizedToken)) {
-          continue;
-        }
-        seenTokens.add(normalizedToken);
-
-        try {
-          const tokenParsed = parseLookupTerm(token);
-          const entries = await provider.fetchEntries(tokenParsed.term, tokenParsed, {
-            credentials,
-          });
-          entries
-            .filter((entry) => Array.isArray(entry?.meanings))
-            .forEach((entry) => {
-              const filteredMeanings = entry.meanings
-                .map((meaning) => {
-                  const filteredDefinitions = (meaning.definitions || []).filter(
-                    (definition) =>
-                      textContainsTerm(definition.definition, parsedTerm.term) ||
-                      textContainsTerm(definition.example, parsedTerm.term)
-                  );
-                  if (!filteredDefinitions.length) {
-                    return null;
-                  }
-
-                  return {
-                    partOfSpeech: meaning.partOfSpeech,
-                    definitions: filteredDefinitions,
-                  };
-                })
-                .filter(Boolean);
-
-              if (filteredMeanings.length) {
-                aggregated.push({
-                  ...entry,
-                  meanings: filteredMeanings,
-                  note: `Matches found inside entry for "${token}"`,
-                });
-              }
-            });
-        } catch (error) {
-          console.warn(`Embedded search failed for token "${token}"`, error);
-        }
-      }
-
-      return aggregated;
-    }
 
     function escapeRegExp(value) {
       if (value === null || value === undefined) {
@@ -3428,95 +3273,6 @@
       return details;
     }
 
-    function buildSynonymEntry(entry, lookupTerm) {
-      if (!Array.isArray(entry.synonyms) || !entry.synonyms.length) {
-        return null;
-      }
-
-      const details = document.createElement("details");
-      details.className = "definition-entry";
-
-      const summary = document.createElement("summary");
-      const summaryText = document.createElement("div");
-      summaryText.className = "entry-summary-text";
-
-      const headword = document.createElement("span");
-      headword.className = "entry-headword";
-      headword.textContent = `Synonyms for ${entry.word || lookupTerm}`;
-      summaryText.appendChild(headword);
-
-      const badgeRow = document.createElement("div");
-      badgeRow.className = "badge-row";
-      badgeRow.appendChild(createBadge(entry.source || "Synonyms", "secondary"));
-      summaryText.appendChild(badgeRow);
-
-      summary.appendChild(summaryText);
-      details.appendChild(summary);
-
-      const content = document.createElement("div");
-      content.className = "entry-content";
-
-      const intro = document.createElement("p");
-      intro.style.margin = "0";
-      intro.textContent = "Click a synonym to search it.";
-      content.appendChild(intro);
-
-      const cloud = document.createElement("div");
-      cloud.className = "synonym-cloud";
-      entry.synonyms.slice(0, 40).forEach((synonym) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = synonym;
-        button.addEventListener("click", () => {
-          lookupTermInput.value = synonym;
-          searchDictionary();
-        });
-        cloud.appendChild(button);
-      });
-
-      content.appendChild(cloud);
-      details.appendChild(content);
-      return details;
-    }
-
-    function renderSpellingSuggestionsList(suggestions, parsedTerm) {
-      if (!spellingSuggestions) {
-        return;
-      }
-
-      const filtered = Array.isArray(suggestions)
-        ? suggestions.filter(
-            (suggestion) =>
-              suggestion &&
-              suggestion.toLowerCase() !== (parsedTerm?.term || "").toLowerCase()
-          )
-        : [];
-
-      if (!filtered.length) {
-        spellingSuggestions.hidden = true;
-        spellingSuggestions.innerHTML = "";
-        return;
-      }
-
-      spellingSuggestions.hidden = false;
-      spellingSuggestions.innerHTML = "";
-
-      const label = document.createElement("span");
-      label.textContent = "Possible spellings:";
-      spellingSuggestions.appendChild(label);
-
-      filtered.forEach((suggestion) => {
-        const suggestionButton = document.createElement("button");
-        suggestionButton.type = "button";
-        suggestionButton.textContent = suggestion;
-        suggestionButton.addEventListener("click", () => {
-          lookupTermInput.value = suggestion;
-          searchDictionary();
-        });
-        spellingSuggestions.appendChild(suggestionButton);
-      });
-    }
-
     function renderDictionaryResults(entries, parsedTerm) {
       dictionaryResults.innerHTML = "";
       if (!entries || !entries.length) {
@@ -3525,19 +3281,14 @@
       }
 
       entries.forEach((entry, index) => {
-        let element = null;
-        if (entry.isSynonymList) {
-          element = buildSynonymEntry(entry, parsedTerm.term);
-        } else {
-          element = buildDefinitionEntry(entry, parsedTerm.term);
-          if (element && index === 0) {
-            element.open = true;
-          }
+        const element = buildDefinitionEntry(entry, parsedTerm.term);
+        if (!element) {
+          return;
         }
-
-        if (element) {
-          dictionaryResults.appendChild(element);
+        if (index === 0) {
+          element.open = true;
         }
+        dictionaryResults.appendChild(element);
       });
     }
 
@@ -3554,30 +3305,16 @@
         return;
       }
 
-      lastPartOfSpeechFilter = parsedTerm.partOfSpeech;
-      updateDictionaryScopeLabel(parsedTerm.partOfSpeech);
 
-      const shouldSearchOnline = activeSearchScope !== SEARCH_SCOPES.decksOnly;
-      const shouldSearchDecks = activeSearchScope !== SEARCH_SCOPES.onlineOnly;
-
-      const scopeLabel = shouldSearchOnline && shouldSearchDecks
-        ? "online dictionaries and decks"
-        : shouldSearchOnline
-        ? "online dictionaries"
-        : "your decks";
-
-      setStatus(`Searching ${scopeLabel} for "${parsedTerm.term}"…`);
+      setStatus(`Searching online dictionaries and decks for "${parsedTerm.term}"…`);
       searchButton.disabled = true;
       dictionaryResults.textContent = "Searching…";
-      renderSpellingSuggestionsList([], parsedTerm);
 
-      const providerIds = shouldSearchOnline ? getActiveDictionaryProviderIds() : [];
       const uniqueEntryKeys = new Set();
       const collectedEntries = [];
       const contributingProviders = new Set();
-      const missingCredentials = [];
       const providerErrors = [];
-      let embeddedMatchCount = 0;
+      let deckLookupSummaries = [];
 
       const addEntries = (entries, providerLabel = "", options = {}) => {
         const { prepend = false, trackProvider = true } = options;
@@ -3588,22 +3325,12 @@
         const iterable = prepend ? [...entries].reverse() : entries;
 
         iterable.forEach((entry) => {
-          if (!entry) {
-            return;
-          }
-
-          if (entry.isSynonymList) {
-            if (!Array.isArray(entry.synonyms) || !entry.synonyms.length) {
-              return;
-            }
-          } else if (!Array.isArray(entry.meanings) || !entry.meanings.length) {
+          if (!entry || !Array.isArray(entry.meanings) || !entry.meanings.length) {
             return;
           }
 
           const key = entry.uniqueKey
             ? entry.uniqueKey
-            : entry.isSynonymList
-            ? `syn-${(entry.source || providerLabel || "").toLowerCase()}-${(entry.word || "").toLowerCase()}-${entry.synonyms.join("|")}`
             : JSON.stringify({
                 source: entry.source || providerLabel || "",
                 word: entry.word || "",
@@ -3637,23 +3364,31 @@
       };
 
       try {
-        const suggestionsPromise = shouldSearchOnline
-          ? fetchSpellingSuggestions(parsedTerm.term)
-          : Promise.resolve([]);
+        const providerPromises = Object.values(dictionaryProviders).map((provider) => {
+          if (!provider || typeof provider.fetchEntries !== "function") {
+            return Promise.resolve();
+          }
 
-        suggestionsPromise
-          .then((suggestions) => {
-            renderSpellingSuggestionsList(suggestions, parsedTerm);
-          })
-          .catch(() => {
-            renderSpellingSuggestionsList([], parsedTerm);
-          });
+          return provider
+            .fetchEntries(parsedTerm.term, parsedTerm, {
+              credentials: getProviderCredentials(provider.id),
+            })
+            .then((entries) => {
+              addEntries(entries, provider.label || provider.id);
+              renderDictionaryResults(collectedEntries, parsedTerm);
+            })
+            .catch((error) => {
+              console.warn(
+                `Dictionary lookup failed for ${provider.label || provider.id}`,
+                error
+              );
+              providerErrors.push(
+                `${provider.label || provider.id}: ${error?.message || "Lookup failed."}`
+              );
+            });
+        });
 
-        let deckLookupSummaries = []
-
-        const deckLookupPromise = (shouldSearchDecks
-          ? findDeckEntriesForSelection(parsedTerm.term)
-          : Promise.resolve([]))
+        const deckLookupPromise = findDeckEntriesForSelection(parsedTerm.term)
           .then((summaries) => {
             deckLookupSummaries = Array.isArray(summaries) ? summaries : [];
             deckLookupSummaries.forEach((summary) => {
@@ -3682,91 +3417,71 @@
             return deckLookupSummaries;
           });
 
-        const finalizeSearch = () => {
-          if (!collectedEntries.length) {
-            renderDictionaryResults([], parsedTerm);
-            let emptyMessage = "No entries available.";
-            deckLookupSummaries.forEach((summary) => {
-              if (summary.deckName && summary.error) {
-                emptyMessage += ` Deck lookup failed for "${summary.deckName}": ${summary.error}`;
-              }
-            });
-            if (missingCredentials.length) {
-              emptyMessage += ` Skipped ${missingCredentials.join(", ")} (missing credentials).`;
+        await Promise.allSettled([...providerPromises, deckLookupPromise]);
+
+        if (!collectedEntries.length) {
+          renderDictionaryResults([], parsedTerm);
+          let emptyMessage = "No entries available.";
+          deckLookupSummaries.forEach((summary) => {
+            if (summary.deckName && summary.error) {
+              emptyMessage += ` Deck lookup failed for "${summary.deckName}": ${summary.error}`;
             }
-            setStatus(emptyMessage, "error");
-            return;
-          }
-
-          renderDictionaryResults(collectedEntries, parsedTerm);
-
-          const statusParts = [];
-
-          if (shouldSearchOnline) {
-            const providerList = Array.from(contributingProviders);
-            let providerSummary;
-            if (!providerIds.length) {
-              providerSummary = "no online dictionaries";
-            } else if (!providerList.length) {
-              providerSummary =
-                providerIds.length === 1
-                  ? dictionaryProviders[providerIds[0]]?.label || providerIds[0]
-                  : "selected dictionaries";
-            } else if (providerList.length === 1) {
-              providerSummary = providerList[0];
-            } else {
-              providerSummary = `${providerList.length} dictionaries (${providerList.join(", ")})`;
-            }
-            const embeddedNote = embeddedMatchCount
-              ? ` including ${embeddedMatchCount} embedded match${embeddedMatchCount === 1 ? "" : "es"}`
-              : "";
-            statusParts.push(`Dictionary results loaded from ${providerSummary}${embeddedNote}.`);
-          }
-
-          if (shouldSearchDecks && deckLookupSummaries.length) {
-            deckLookupSummaries.forEach((summary) => {
-              if (!summary.deckName) {
-                return;
-              }
-              if (summary.error) {
-                statusParts.push(
-                  `Deck lookup failed for "${summary.deckName}": ${summary.error}`
-                );
-                return;
-              }
-
-              if (summary.totalCount > 0) {
-                let deckMessage = `Found ${summary.totalCount} existing card${
-                  summary.totalCount === 1 ? "" : "s"
-                } in "${summary.deckName}"`;
-                if (summary.truncated && summary.shownCount) {
-                  deckMessage += ` (showing first ${summary.shownCount})`;
-                }
-                deckMessage += ".";
-                statusParts.push(deckMessage);
-              } else {
-                statusParts.push(`No existing cards matched in "${summary.deckName}".`);
-              }
-            });
-          }
-
-          if (missingCredentials.length) {
-            statusParts.push(`Skipped ${missingCredentials.join(", ")} (missing credentials).`);
-          }
-
+          });
           if (providerErrors.length) {
-            statusParts.push(`Dictionary errors: ${providerErrors.join("; ")}.`);
+            emptyMessage += ` Dictionary errors: ${providerErrors.join("; ")}.`;
           }
+          setStatus(emptyMessage, "error");
+          return;
+        }
 
-          const hasDeckErrors = deckLookupSummaries.some((summary) => summary.error);
-          const statusType = hasDeckErrors || providerErrors.length ? "error" : "success";
-          setStatus(statusParts.join(" "), statusType);
-        };
+        renderDictionaryResults(collectedEntries, parsedTerm);
 
-        const streamingCompletion = Promise.allSettled([...providerTasks, deckLookupPromise]);
-        await streamingCompletion;
+        const statusParts = [];
+        const providerList = Array.from(contributingProviders);
 
-        finalizeSearch();
+        if (providerList.length) {
+          statusParts.push(
+            `Dictionary results loaded from ${
+              providerList.length === 1
+                ? providerList[0]
+                : `${providerList.length} dictionaries (${providerList.join(", ")})`
+            }.`
+          );
+        } else if (!providerErrors.length) {
+          statusParts.push("No online dictionary entries were found.");
+        }
+
+        if (deckLookupSummaries.length) {
+          deckLookupSummaries.forEach((summary) => {
+            if (!summary.deckName) {
+              return;
+            }
+            if (summary.error) {
+              statusParts.push(`Deck lookup failed for "${summary.deckName}": ${summary.error}`);
+              return;
+            }
+
+            if (summary.totalCount > 0) {
+              let deckMessage = `Found ${summary.totalCount} existing card${
+                summary.totalCount === 1 ? "" : "s"
+              } in "${summary.deckName}"`;
+              if (summary.truncated && summary.shownCount) {
+                deckMessage += ` (showing first ${summary.shownCount})`;
+              }
+              statusParts.push(`${deckMessage}.`);
+            } else {
+              statusParts.push(`No existing cards matched in "${summary.deckName}".`);
+            }
+          });
+        }
+
+        if (providerErrors.length) {
+          statusParts.push(`Dictionary errors: ${providerErrors.join("; ")}.`);
+        }
+
+        const hasDeckErrors = deckLookupSummaries.some((summary) => summary.error);
+        const statusType = hasDeckErrors || providerErrors.length ? "error" : "success";
+        setStatus(statusParts.join(" "), statusType);
       } catch (error) {
         console.error(error);
         dictionaryResults.textContent = "No entries available.";
