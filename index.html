@@ -1873,313 +1873,7 @@
       return fetchWiktionaryHtmlEntries(lookup);
     }
 
-    function extractPhoneticText(entry) {
-      if (!entry || typeof entry !== "object") {
-        return "";
-      }
-
-      const direct = typeof entry.phonetic === "string" ? entry.phonetic.trim() : "";
-      if (direct) {
-        return direct;
-      }
-
-      if (Array.isArray(entry.phonetics)) {
-        for (const phoneticEntry of entry.phonetics) {
-          const phoneticText =
-            typeof phoneticEntry?.text === "string" ? phoneticEntry.text.trim() : "";
-          if (phoneticText) {
-            return phoneticText;
-          }
-        }
-      }
-
-      return "";
-    }
-
-    function normalizeDictionaryApiDevEntries(payload, term) {
-      if (!Array.isArray(payload)) {
-        return [];
-      }
-
-      return payload
-        .map((entry) => {
-          if (!entry || typeof entry !== "object") {
-            return null;
-          }
-
-          const meanings = Array.isArray(entry.meanings)
-            ? entry.meanings
-                .map((meaning) => {
-                  if (!meaning || typeof meaning !== "object") {
-                    return null;
-                  }
-
-                  const definitions = Array.isArray(meaning.definitions)
-                    ? meaning.definitions
-                        .map((definition) => {
-                          const rawDefinition =
-                            typeof definition?.definition === "string"
-                              ? definition.definition
-                              : "";
-                          const cleanedDefinition = stripHtml(rawDefinition).trim();
-                          if (!cleanedDefinition) {
-                            return null;
-                          }
-
-                          const exampleAccumulator = [];
-                          if (definition?.example) {
-                            collectExampleStrings(definition.example, exampleAccumulator);
-                          }
-                          if (Array.isArray(definition?.examples)) {
-                            collectExampleStrings(definition.examples, exampleAccumulator);
-                          }
-
-                          const examples = Array.from(
-                            new Set(
-                              exampleAccumulator
-                                .map((example) =>
-                                  typeof example === "string" ? example.trim() : ""
-                                )
-                                .filter(Boolean)
-                            )
-                          );
-
-                          return {
-                            definition: cleanedDefinition,
-                            example: examples[0] || "",
-                            examples,
-                          };
-                        })
-                        .filter(Boolean)
-                    : [];
-
-                  if (!definitions.length) {
-                    return null;
-                  }
-
-                  const partOfSpeech =
-                    typeof meaning.partOfSpeech === "string"
-                      ? meaning.partOfSpeech.trim()
-                      : "";
-
-                  return {
-                    partOfSpeech: partOfSpeech || "Definition",
-                    definitions,
-                  };
-                })
-                .filter(Boolean)
-            : [];
-
-          if (!meanings.length) {
-            return null;
-          }
-
-          const phonetic = extractPhoneticText(entry);
-
-          const normalized = {
-            word: entry.word || term,
-            source: "DictionaryAPI.dev",
-            meanings,
-          };
-
-          if (phonetic) {
-            normalized.phonetic = phonetic;
-          }
-
-          return normalized;
-        })
-        .filter(Boolean);
-    }
-
-    async function fetchDictionaryApiDevEntries(term, parsedTerm) {
-      const lookup = parsedTerm?.term || term;
-      if (!lookup) {
-        return [];
-      }
-
-      const language = "en";
-      const url = `https://api.dictionaryapi.dev/api/v2/entries/${language}/${encodeURIComponent(
-        lookup
-      )}`;
-
-      let response;
-      try {
-        response = await fetch(url, {
-          headers: { Accept: "application/json" },
-        });
-      } catch (networkError) {
-        throw new Error("DictionaryAPI.dev lookup failed (network error)");
-      }
-
-      if (response.status === 404) {
-        return [];
-      }
-
-      if (!response.ok) {
-        throw new Error(`DictionaryAPI.dev lookup failed (status ${response.status})`);
-      }
-
-      const data = await response.json();
-      return normalizeDictionaryApiDevEntries(data, lookup);
-    }
-
-    function normalizeFreeDictionaryEntries(payload, term) {
-      if (!Array.isArray(payload)) {
-        return [];
-      }
-
-      return payload
-        .map((entry) => {
-          if (!entry || typeof entry !== "object") {
-            return null;
-          }
-
-          const meanings = Array.isArray(entry.meanings)
-            ? entry.meanings
-                .map((meaning) => {
-                  if (!meaning || typeof meaning !== "object") {
-                    return null;
-                  }
-
-                  const definitions = Array.isArray(meaning.definitions)
-                    ? meaning.definitions
-                        .map((definition) => {
-                          const rawDefinition =
-                            typeof definition?.definition === "string"
-                              ? definition.definition
-                              : "";
-                          const cleanedDefinition = stripHtml(rawDefinition).trim();
-                          if (!cleanedDefinition) {
-                            return null;
-                          }
-
-                          const exampleAccumulator = [];
-                          if (definition?.example) {
-                            collectExampleStrings(definition.example, exampleAccumulator);
-                          }
-                          if (Array.isArray(definition?.examples)) {
-                            collectExampleStrings(definition.examples, exampleAccumulator);
-                          }
-
-                          const examples = Array.from(
-                            new Set(
-                              exampleAccumulator
-                                .map((example) =>
-                                  typeof example === "string" ? example.trim() : ""
-                                )
-                                .filter(Boolean)
-                            )
-                          );
-
-                          return {
-                            definition: cleanedDefinition,
-                            example: examples[0] || "",
-                            examples,
-                          };
-                        })
-                        .filter(Boolean)
-                    : [];
-
-                  if (!definitions.length) {
-                    return null;
-                  }
-
-                  const partOfSpeech =
-                    typeof meaning.partOfSpeech === "string"
-                      ? meaning.partOfSpeech.trim()
-                      : "";
-
-                  return {
-                    partOfSpeech: partOfSpeech || "Definition",
-                    definitions,
-                  };
-                })
-                .filter(Boolean)
-            : [];
-
-          if (!meanings.length) {
-            return null;
-          }
-
-          const phonetic = extractPhoneticText(entry);
-          const attributionParts = [];
-
-          if (Array.isArray(entry.sourceUrls) && entry.sourceUrls.length) {
-            attributionParts.push(`Source: ${entry.sourceUrls[0]}`);
-          }
-
-          if (entry.license?.name) {
-            attributionParts.push(`License: ${entry.license.name}`);
-          }
-
-          const normalized = {
-            word: entry.word || term,
-            source: "FreeDictionaryAPI",
-            meanings,
-          };
-
-          if (phonetic) {
-            normalized.phonetic = phonetic;
-          }
-
-          if (attributionParts.length) {
-            normalized.note = attributionParts.join(" • ");
-          }
-
-          return normalized;
-        })
-        .filter(Boolean);
-    }
-
-    async function fetchFreeDictionaryEntries(term, parsedTerm) {
-      const lookup = parsedTerm?.term || term;
-      if (!lookup) {
-        return [];
-      }
-
-      const language = "en";
-      const url = `https://api.freedictionary.dev/api/v1/entries/${language}/${encodeURIComponent(
-        lookup
-      )}`;
-
-      let response;
-      try {
-        response = await fetch(url, {
-          headers: { Accept: "application/json" },
-        });
-      } catch (networkError) {
-        throw new Error("FreeDictionaryAPI lookup failed (network error)");
-      }
-
-      if (response.status === 404) {
-        return [];
-      }
-
-      if (!response.ok) {
-        throw new Error(`FreeDictionaryAPI lookup failed (status ${response.status})`);
-      }
-
-      const data = await response.json();
-      return normalizeFreeDictionaryEntries(data, lookup);
-    }
-
     const dictionaryProviders = {
-      dictionaryApiDev: {
-        id: "dictionaryApiDev",
-        label: "DictionaryAPI.dev",
-        fetchEntries: fetchDictionaryApiDevEntries,
-        supportsEmbeddedSearch: false,
-        defaultEnabled: true,
-        type: "definition",
-      },
-      freeDictionaryApi: {
-        id: "freeDictionaryApi",
-        label: "FreeDictionaryAPI",
-        fetchEntries: fetchFreeDictionaryEntries,
-        supportsEmbeddedSearch: false,
-        defaultEnabled: true,
-        type: "definition",
-      },
       wiktionary: {
         id: "wiktionary",
         label: "Wiktionary",
@@ -3202,6 +2896,21 @@
       return text.replace(pattern, (match) => createMaskFromMatch(match));
     }
 
+    function sanitizeDictionaryText(text) {
+      if (text === null || text === undefined) {
+        return "";
+      }
+
+      const raw = typeof text === "string" ? text : String(text);
+      const withoutCloze = raw.replace(/\{\{c\d+::(.*?)(::.*?)?\}\}/gi, (_, content) => {
+        return content ? content.trim() : "";
+      });
+
+      const withoutNbsp = withoutCloze.replace(/\u00a0/g, " ");
+      const collapsedSpaces = withoutNbsp.replace(/ {2,}/g, " ");
+      return collapsedSpaces.replace(/ \n/g, "\n").trim();
+    }
+
     async function loadNoteTypesForDeck(deckName) {
       if (!deckName) {
         pendingNoteTypeDeck = "";
@@ -3377,16 +3086,17 @@
         return;
       }
 
-      if (!text) {
+      const cleaned = sanitizeDictionaryText(text);
+      if (!cleaned) {
         element.textContent = "";
         return;
       }
 
-      const masked = maskTargetInText(text, lookupTerm);
-      if (masked && masked !== text) {
+      const masked = maskTargetInText(cleaned, lookupTerm);
+      if (masked && masked !== cleaned) {
         element.innerHTML = masked;
       } else {
-        element.textContent = text;
+        element.textContent = cleaned;
       }
     }
 
@@ -3550,7 +3260,12 @@
 
           const definitionText = document.createElement("p");
           definitionText.className = "definition-text";
-          applyMaskedContent(definitionText, definition.definition, lookupTerm);
+          const sanitizedDefinition = sanitizeDictionaryText(definition.definition);
+          if (!sanitizedDefinition) {
+            return;
+          }
+
+          applyMaskedContent(definitionText, sanitizedDefinition, lookupTerm);
           listItem.appendChild(definitionText);
 
           const exampleCandidates = Array.isArray(definition.examples)
@@ -3563,7 +3278,7 @@
           const examples = Array.from(
             new Set(
               exampleCandidates
-                .map((candidate) => (candidate || "").toString().trim())
+                .map((candidate) => sanitizeDictionaryText((candidate || "").toString()))
                 .filter(Boolean)
             )
           );
@@ -3587,7 +3302,8 @@
                 exampleButton.textContent =
                   examples.length > 1 ? `Use example ${index + 1}` : "Use this example";
                 exampleButton.addEventListener("click", () => {
-                  exampleField.value = maskTargetInText(exampleText, lookupTerm);
+                  const sanitizedExample = sanitizeDictionaryText(exampleText);
+                  exampleField.value = maskTargetInText(sanitizedExample, lookupTerm);
                   adjustTextareaHeight(exampleField);
                   setStatus("Example added to the card", "success");
                 });
@@ -3608,7 +3324,8 @@
             definitionButton.type = "button";
             definitionButton.textContent = "Use this definition";
             definitionButton.addEventListener("click", () => {
-              backField.value = maskTargetInText(definition.definition, lookupTerm);
+              const maskedDefinition = maskTargetInText(sanitizedDefinition, lookupTerm);
+              backField.value = maskedDefinition;
               adjustTextareaHeight(backField);
               frontField.value = entry.word || lookupTerm;
               adjustTextareaHeight(frontField);
