@@ -774,19 +774,28 @@
         <section class="panel note-panel" id="note-panel">
           <div class="note-grid">
             <div class="note-field note-field--word">
-              <label for="front-field">Word</label>
-              <textarea id="front-field" placeholder="Word"></textarea>
+              <textarea
+                id="front-field"
+                placeholder="Word"
+                aria-label="Word"
+                title="Word"
+              ></textarea>
             </div>
             <div class="note-field note-field--masked" id="masked-field-container" hidden></div>
             <div class="note-field note-field--definition">
-              <label for="back-field">Definition</label>
-              <textarea id="back-field" placeholder="Definition"></textarea>
+              <textarea
+                id="back-field"
+                placeholder="Definition"
+                aria-label="Definition"
+                title="Definition"
+              ></textarea>
             </div>
             <div class="note-field note-field--example" id="example-field-wrapper">
-              <label for="example-field">Example Sentence (optional)</label>
               <textarea
                 id="example-field"
-                placeholder="Add your own or pick one from the dictionary results"
+                placeholder="Example"
+                aria-label="Example"
+                title="Example"
               ></textarea>
             </div>
           </div>
@@ -801,7 +810,6 @@
           <h2>Dictionary Lookup</h2>
           <div class="dictionary-controls">
             <input type="text" id="lookup-term" placeholder="Search term" />
-            <div class="dictionary-scope" aria-live="polite">All dictionaries</div>
             <button id="search-dictionary">Search</button>
           </div>
           <div class="dictionary-settings">
@@ -831,16 +839,12 @@
     const loadDecksBtn = document.getElementById("load-decks");
     const lookupTermInput = document.getElementById("lookup-term");
     const searchButton = document.getElementById("search-dictionary");
-    const dictionaryScopeDisplay = document.querySelector(".dictionary-scope");
     const dictionaryProviderGrid = document.getElementById("dictionary-provider-grid");
     const dictionaryResults = document.getElementById("dictionary-results");
     const spellingSuggestions = document.getElementById("spelling-suggestions");
     const frontField = document.getElementById("front-field");
     const backField = document.getElementById("back-field");
     const exampleField = document.getElementById("example-field");
-    const frontFieldLabel = document.querySelector("label[for='front-field']");
-    const backFieldLabel = document.querySelector("label[for='back-field']");
-    const exampleFieldLabel = document.querySelector("label[for='example-field']");
     const exampleFieldWrapper = document.getElementById("example-field-wrapper");
     const maskedFieldContainer = document.getElementById("masked-field-container");
     const additionalFieldsContainer = document.getElementById("additional-fields");
@@ -857,10 +861,10 @@
     const sidebar = document.getElementById("sidebar");
     const sidebarToggle = document.getElementById("sidebar-toggle");
 
-    const DEFAULT_FIELD_LABELS = {
-      front: frontFieldLabel ? frontFieldLabel.textContent : "Word",
-      back: backFieldLabel ? backFieldLabel.textContent : "Definition",
-      example: exampleFieldLabel ? exampleFieldLabel.textContent : "Example Sentence (optional)",
+    const DEFAULT_FIELD_PLACEHOLDERS = {
+      front: "Word",
+      back: "Definition",
+      example: "Example",
     };
 
     function adjustTextareaHeight(textarea) {
@@ -1276,48 +1280,7 @@
     }
 
     function updateDictionaryScopeLabel(partOfSpeechLabel = lastPartOfSpeechFilter) {
-      if (!dictionaryScopeDisplay) {
-        return;
-      }
-
-      const providerIds = activeSearchScope === SEARCH_SCOPES.decksOnly
-        ? []
-        : getActiveDictionaryProviderIds();
-
-      const providerLabels = providerIds
-        .map((id) => dictionaryProviders[id]?.label || id)
-        .filter(Boolean);
-
-      let providerSummary = "No online dictionaries";
-      if (providerLabels.length === 1) {
-        providerSummary = providerLabels[0];
-      } else if (providerLabels.length > 1) {
-        if (providerLabels.length <= 3) {
-          providerSummary = providerLabels.join(", ");
-        } else {
-          providerSummary = `${providerLabels.slice(0, 2).join(", ")}, +${
-            providerLabels.length - 2
-          } more`;
-        }
-      }
-
-      const scopeLabelMap = {
-        [SEARCH_SCOPES.onlineDecks]: "Online + decks",
-        [SEARCH_SCOPES.onlineOnly]: "Online only",
-        [SEARCH_SCOPES.decksOnly]: "Decks only",
-      };
-
-      const scopeText = scopeLabelMap[activeSearchScope] || "Custom scope";
-
-      const parts = [scopeText];
-      if (activeSearchScope !== SEARCH_SCOPES.decksOnly) {
-        parts.push(providerSummary);
-      }
-      if (partOfSpeechLabel) {
-        parts.push(`POS: ${partOfSpeechLabel}`);
-      }
-
-      dictionaryScopeDisplay.textContent = parts.join(" • ");
+      lastPartOfSpeechFilter = partOfSpeechLabel || "";
     }
 
     function setSearchScope(scope) {
@@ -1655,6 +1618,32 @@
       "www.wordnik.com",
     ]);
 
+    function isLikelyLocalhost(hostname) {
+      if (!hostname) {
+        return false;
+      }
+
+      const normalized = hostname.toLowerCase();
+      if (
+        normalized === "localhost" ||
+        normalized === "127.0.0.1" ||
+        normalized === "::1" ||
+        normalized.endsWith(".local")
+      ) {
+        return true;
+      }
+
+      if (/^192\.168\./.test(normalized) || /^10\./.test(normalized)) {
+        return true;
+      }
+
+      if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(normalized)) {
+        return true;
+      }
+
+      return false;
+    }
+
     function rewriteDictionaryRequestUrl(url) {
       if (!url) {
         return url;
@@ -1667,17 +1656,26 @@
             : "http://localhost";
         const targetUrl = new URL(url, base);
 
-        if (targetUrl.pathname === "/proxy") {
-          return url;
-        }
-
         const host = targetUrl.host.toLowerCase();
         if (!DICTIONARY_PROXY_HOSTS.has(host)) {
           return url;
         }
 
-        const encoded = encodeURIComponent(targetUrl.toString());
-        return `/proxy?url=${encoded}`;
+        const shouldUseLocalProxy =
+          typeof window !== "undefined" &&
+          window.location &&
+          isLikelyLocalhost(window.location.hostname);
+
+        if (shouldUseLocalProxy) {
+          if (targetUrl.pathname === "/proxy") {
+            return url;
+          }
+
+          const encoded = encodeURIComponent(targetUrl.toString());
+          return `/proxy?url=${encoded}`;
+        }
+
+        return `https://r.jina.ai/${targetUrl.toString()}`;
       } catch (error) {
         return url;
       }
@@ -2611,7 +2609,7 @@
 
       const assignedFields = new Set();
 
-      const assignPrimaryEditor = (element, labelElement, defaultLabel, fieldName) => {
+      const assignPrimaryEditor = (element, defaultLabel, fieldName) => {
         if (!element) {
           return;
         }
@@ -2620,12 +2618,18 @@
           fieldName && preservedValues.has(fieldName) ? preservedValues.get(fieldName) : "";
         element.dataset.fieldName = fieldName || "";
         element.value = fieldName ? previousValue : "";
+        const labelText = fieldName || defaultLabel;
+        if (labelText) {
+          element.placeholder = labelText;
+          element.setAttribute("aria-label", labelText);
+          element.title = labelText;
+        } else {
+          element.removeAttribute("placeholder");
+          element.removeAttribute("aria-label");
+          element.removeAttribute("title");
+        }
         if (element.tagName === "TEXTAREA") {
           adjustTextareaHeight(element);
-        }
-
-        if (labelElement) {
-          labelElement.textContent = fieldName || defaultLabel;
         }
 
         if (fieldName) {
@@ -2642,16 +2646,15 @@
       const exampleFieldName = roleMap.example || null;
       const maskedFieldName = roleMap.masked || null;
 
-      assignPrimaryEditor(frontField, frontFieldLabel, DEFAULT_FIELD_LABELS.front, wordFieldName);
-      assignPrimaryEditor(backField, backFieldLabel, DEFAULT_FIELD_LABELS.back, definitionFieldName);
+      assignPrimaryEditor(frontField, DEFAULT_FIELD_PLACEHOLDERS.front, wordFieldName);
+      assignPrimaryEditor(backField, DEFAULT_FIELD_PLACEHOLDERS.back, definitionFieldName);
 
       if (exampleFieldWrapper) {
         exampleFieldWrapper.hidden = !exampleFieldName;
       }
       assignPrimaryEditor(
         exampleField,
-        exampleFieldLabel,
-        DEFAULT_FIELD_LABELS.example,
+        DEFAULT_FIELD_PLACEHOLDERS.example,
         exampleFieldName
       );
       if (!exampleFieldName && exampleField) {
@@ -2663,19 +2666,18 @@
         const previousValue = preservedValues.has(maskedFieldName)
           ? preservedValues.get(maskedFieldName)
           : "";
-        const label = document.createElement("label");
         const editorId = createFieldEditorId(maskedFieldName);
-        label.htmlFor = editorId;
-        label.textContent = maskedFieldName;
-
         const textarea = document.createElement("textarea");
         textarea.id = editorId;
         textarea.dataset.fieldName = maskedFieldName;
         textarea.readOnly = true;
         textarea.value = previousValue;
+        const labelText = maskedFieldName || "W•••";
+        textarea.placeholder = labelText;
+        textarea.setAttribute("aria-label", labelText);
+        textarea.title = labelText;
         textarea.addEventListener("input", () => adjustTextareaHeight(textarea));
 
-        maskedFieldContainer.appendChild(label);
         maskedFieldContainer.appendChild(textarea);
         maskedFieldContainer.hidden = false;
         adjustTextareaHeight(textarea);
