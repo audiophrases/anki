@@ -2,10 +2,9 @@ import http from "node:http";
 import { URL } from "node:url";
 
 const ALLOWED_HOSTS = new Set([
-  "www.merriam-webster.com",
-  "www.ldoceonline.com",
-  "www.oxfordlearnersdictionaries.com",
-  "dictionary.cambridge.org",
+  "www.wordwebonline.com",
+  "en.wiktionary.org",
+  "www.wordnik.com",
 ]);
 
 const HOP_BY_HOP_HEADERS = new Set([
