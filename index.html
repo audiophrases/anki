@@ -3010,7 +3010,7 @@
       const content = document.createElement("div");
       content.className = "entry-content";
 
-      if (entry.note) {
+      if (entry.note && !entry.isExistingNote) {
         const noteParagraph = document.createElement("p");
         noteParagraph.style.margin = "0";
         noteParagraph.textContent = entry.note;
@@ -3024,68 +3024,21 @@
         content.appendChild(phonetic);
       }
 
-      if (entry.isExistingNote && entry.noteDetails) {
-        const actions = document.createElement("div");
-        actions.className = "entry-actions";
-        let hasActions = false;
+      let sanitizedNoteWord = "";
+      let resolveMaskTarget = () => sanitizeDictionaryText(lookupTerm || "");
 
-        const sanitizedNoteWord = sanitizeDictionaryText(
+      if (entry.isExistingNote && entry.noteDetails) {
+        sanitizedNoteWord = sanitizeDictionaryText(
           (entry.noteDetails.display && entry.noteDetails.display.frontText) ||
             entry.word ||
             lookupTerm ||
             ""
         );
-        const sanitizedNoteDefinition = sanitizeDictionaryText(
-          (entry.noteDetails.display && entry.noteDetails.display.backText) || ""
-        );
-        const sanitizedNoteExample = sanitizeDictionaryText(
-          (entry.noteDetails.display && entry.noteDetails.display.exampleText) || ""
-        );
 
-        const resolveMaskTarget = () => {
+        resolveMaskTarget = () => {
           const currentWordValue = frontField ? sanitizeDictionaryText(frontField.value) : "";
           return sanitizedNoteWord || currentWordValue || sanitizeDictionaryText(lookupTerm || "");
         };
-
-        if (sanitizedNoteDefinition && backField) {
-          const useDefinitionButton = document.createElement("button");
-          useDefinitionButton.type = "button";
-          useDefinitionButton.textContent = "Use this definition";
-          useDefinitionButton.addEventListener("click", () => {
-            applyNoteToEditor(entry.noteDetails);
-            const targetWord = resolveMaskTarget();
-            const maskedDefinition = maskTargetInText(sanitizedNoteDefinition, targetWord);
-            backField.value = maskedDefinition;
-            adjustTextareaHeight(backField);
-            if (sanitizedNoteWord && frontField) {
-              frontField.value = sanitizedNoteWord;
-              adjustTextareaHeight(frontField);
-            }
-            refreshMaskedWordField();
-            setStatus("Definition added from existing card. Ready to create a new card.", "success");
-          });
-          actions.appendChild(useDefinitionButton);
-          hasActions = true;
-        }
-
-        if (sanitizedNoteExample && exampleField) {
-          const useExampleButton = document.createElement("button");
-          useExampleButton.type = "button";
-          useExampleButton.textContent = "Use this example";
-          useExampleButton.addEventListener("click", () => {
-            applyNoteToEditor(entry.noteDetails);
-            const targetWord = resolveMaskTarget();
-            const maskedExample = maskTargetInText(sanitizedNoteExample, targetWord);
-            exampleField.value = maskedExample;
-            adjustTextareaHeight(exampleField);
-            setStatus("Example added from existing card. Ready to create a new card.", "success");
-          });
-          actions.appendChild(useExampleButton);
-          hasActions = true;
-        }
-        if (hasActions) {
-          content.appendChild(actions);
-        }
       }
 
       (entry.meanings || []).forEach((meaning) => {
@@ -3135,8 +3088,9 @@
             )
           );
 
+          let exampleList = null;
           if (examples.length) {
-            const exampleList = document.createElement("ul");
+            exampleList = document.createElement("ul");
             exampleList.className = "example-list";
 
             examples.forEach((exampleText, index) => {
@@ -3148,16 +3102,25 @@
               applyMaskedContent(exampleTextElement, exampleText, lookupTerm);
               exampleItem.appendChild(exampleTextElement);
 
-              if (!entry.isExistingNote) {
+              if (exampleField) {
                 const exampleButton = document.createElement("button");
                 exampleButton.type = "button";
-                exampleButton.textContent =
+                const defaultLabel =
                   examples.length > 1 ? `Use example ${index + 1}` : "Use this example";
+                exampleButton.textContent = entry.isExistingNote ? "Use this example" : defaultLabel;
                 exampleButton.addEventListener("click", () => {
                   const sanitizedExample = sanitizeDictionaryText(exampleText);
-                  exampleField.value = maskTargetInText(sanitizedExample, lookupTerm);
+                  const targetWord = resolveMaskTarget();
+                  const maskedExample = maskTargetInText(
+                    sanitizedExample,
+                    entry.isExistingNote ? targetWord : lookupTerm
+                  );
+                  exampleField.value = maskedExample;
                   adjustTextareaHeight(exampleField);
-                  setStatus("Example added to the card", "success");
+                  const message = entry.isExistingNote
+                    ? "Example added from existing card. Ready to create a new card."
+                    : "Example added to the card";
+                  setStatus(message, "success");
                 });
                 exampleItem.appendChild(exampleButton);
               }
@@ -3168,25 +3131,41 @@
             listItem.appendChild(exampleList);
           }
 
-          if (!entry.isExistingNote) {
-            const actions = document.createElement("div");
+          let actions = null;
+          if (backField && sanitizedDefinition) {
+            actions = document.createElement("div");
             actions.className = "definition-actions";
 
             const definitionButton = document.createElement("button");
             definitionButton.type = "button";
             definitionButton.textContent = "Use this definition";
             definitionButton.addEventListener("click", () => {
-              const maskedDefinition = maskTargetInText(sanitizedDefinition, lookupTerm);
+              const targetWord = resolveMaskTarget();
+              const maskedDefinition = maskTargetInText(
+                sanitizedDefinition,
+                entry.isExistingNote ? targetWord : lookupTerm
+              );
               backField.value = maskedDefinition;
               adjustTextareaHeight(backField);
-              frontField.value = entry.word || lookupTerm;
-              adjustTextareaHeight(frontField);
+              if (!entry.isExistingNote && frontField) {
+                frontField.value = entry.word || lookupTerm;
+                adjustTextareaHeight(frontField);
+              }
               refreshMaskedWordField();
-              setStatus("Definition added to the card", "success");
+              const message = entry.isExistingNote
+                ? "Definition added from existing card. Ready to create a new card."
+                : "Definition added to the card";
+              setStatus(message, "success");
             });
             actions.appendChild(definitionButton);
+          }
 
-            listItem.appendChild(actions);
+          if (actions) {
+            if (entry.isExistingNote && exampleList) {
+              listItem.insertBefore(actions, exampleList);
+            } else {
+              listItem.appendChild(actions);
+            }
           }
 
           definitionList.appendChild(listItem);
