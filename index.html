@@ -3167,6 +3167,57 @@
         });
         actions.appendChild(loadButton);
 
+        const sanitizedNoteWord = sanitizeDictionaryText(
+          (entry.noteDetails.display && entry.noteDetails.display.frontText) ||
+            entry.word ||
+            lookupTerm ||
+            ""
+        );
+        const sanitizedNoteDefinition = sanitizeDictionaryText(
+          (entry.noteDetails.display && entry.noteDetails.display.backText) || ""
+        );
+        const sanitizedNoteExample = sanitizeDictionaryText(
+          (entry.noteDetails.display && entry.noteDetails.display.exampleText) || ""
+        );
+
+        const resolveMaskTarget = () => {
+          const currentWordValue = frontField ? sanitizeDictionaryText(frontField.value) : "";
+          return sanitizedNoteWord || currentWordValue || sanitizeDictionaryText(lookupTerm || "");
+        };
+
+        if (sanitizedNoteDefinition && backField) {
+          const useDefinitionButton = document.createElement("button");
+          useDefinitionButton.type = "button";
+          useDefinitionButton.textContent = "Use definition";
+          useDefinitionButton.addEventListener("click", () => {
+            const targetWord = resolveMaskTarget();
+            const maskedDefinition = maskTargetInText(sanitizedNoteDefinition, targetWord);
+            backField.value = maskedDefinition;
+            adjustTextareaHeight(backField);
+            if (sanitizedNoteWord && frontField) {
+              frontField.value = sanitizedNoteWord;
+              adjustTextareaHeight(frontField);
+            }
+            refreshMaskedWordField();
+            setStatus("Definition added from existing card.", "success");
+          });
+          actions.appendChild(useDefinitionButton);
+        }
+
+        if (sanitizedNoteExample && exampleField) {
+          const useExampleButton = document.createElement("button");
+          useExampleButton.type = "button";
+          useExampleButton.textContent = "Use example";
+          useExampleButton.addEventListener("click", () => {
+            const targetWord = resolveMaskTarget();
+            const maskedExample = maskTargetInText(sanitizedNoteExample, targetWord);
+            exampleField.value = maskedExample;
+            adjustTextareaHeight(exampleField);
+            setStatus("Example added from existing card.", "success");
+          });
+          actions.appendChild(useExampleButton);
+        }
+
         const copyButton = document.createElement("button");
         copyButton.type = "button";
         copyButton.textContent = "Copy to current deck";
