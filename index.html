@@ -1918,6 +1918,102 @@
       return (value || "").replace(/\s+/g, "").toLowerCase();
     }
 
+    function escapeForAnkiQuery(value) {
+      if (!value) {
+        return "";
+      }
+
+      return value.replace(/(["\\])/g, "\\$1");
+    }
+
+    function escapeFieldNameForAnkiQuery(fieldName) {
+      if (!fieldName) {
+        return "";
+      }
+
+      const escaped = escapeForAnkiQuery(fieldName);
+      return /\s/.test(fieldName) ? `"${escaped}"` : escaped;
+    }
+
+    async function findDuplicateNoteId({ modelName, wordFieldName, wordValue }) {
+      const candidates = Array.from(
+        new Set(
+          [wordValue, stripHtml(wordValue)]
+            .map((candidate) => (candidate || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      if (!candidates.length) {
+        return null;
+      }
+
+      const escapedModel = escapeForAnkiQuery(modelName || "");
+      const fieldNameQuery = escapeFieldNameForAnkiQuery(wordFieldName || "");
+      const seenQueries = new Set();
+
+      const tryQueries = async (queries) => {
+        for (const query of queries) {
+          if (!query || seenQueries.has(query)) {
+            continue;
+          }
+          seenQueries.add(query);
+          try {
+            const noteIds = await callAnkiConnect("findNotes", { query });
+            if (Array.isArray(noteIds) && noteIds.length) {
+              return noteIds[0];
+            }
+          } catch (queryError) {
+            console.warn(`findNotes failed for query "${query}"`, queryError);
+          }
+        }
+        return null;
+      };
+
+      const primaryQueries = candidates.map((candidate) => {
+        const escapedValue = escapeForAnkiQuery(candidate);
+        const parts = [];
+        if (escapedModel) {
+          parts.push(`note:"${escapedModel}"`);
+        }
+        if (fieldNameQuery) {
+          parts.push(`${fieldNameQuery}:"${escapedValue}"`);
+        } else {
+          parts.push(`"${escapedValue}"`);
+        }
+        return parts.join(" ").trim();
+      });
+
+      const primaryMatch = await tryQueries(primaryQueries);
+      if (primaryMatch) {
+        return primaryMatch;
+      }
+
+      if (fieldNameQuery) {
+        const fallbackQueries = candidates.map((candidate) => {
+          const escapedValue = escapeForAnkiQuery(candidate);
+          const parts = [];
+          if (escapedModel) {
+            parts.push(`note:"${escapedModel}"`);
+          }
+          parts.push(`"${escapedValue}"`);
+          return parts.join(" ").trim();
+        });
+
+        const fallbackMatch = await tryQueries(fallbackQueries);
+        if (fallbackMatch) {
+          return fallbackMatch;
+        }
+      }
+
+      const globalQueries = candidates.map((candidate) => {
+        const escapedValue = escapeForAnkiQuery(candidate);
+        return `"${escapedValue}"`;
+      });
+
+      return tryQueries(globalQueries);
+    }
+
     function createFieldEditorId(fieldName) {
       const slug = (fieldName || "")
         .toString()
@@ -2044,6 +2140,55 @@
       return maskTargetInText(plain, plain);
     }
 
+    function setMaskedEditorUserEdited(editor, userEdited) {
+      if (!editor) {
+        return;
+      }
+      editor.dataset.userEdited = userEdited ? "true" : "false";
+    }
+
+    function isMaskedEditorUserEdited(editor) {
+      return editor?.dataset.userEdited === "true";
+    }
+
+    function initializeMaskedFieldEditor(editor, { userEditedOnInit } = {}) {
+      if (!editor) {
+        return;
+      }
+
+      const updateUserEditedState = () => {
+        const trimmed = editor.value.trim();
+        setMaskedEditorUserEdited(editor, Boolean(trimmed));
+      };
+
+      if (editor.dataset.maskedInitialized !== "true") {
+        editor.addEventListener("input", () => {
+          updateUserEditedState();
+          adjustTextareaHeight(editor);
+        });
+        editor.dataset.maskedInitialized = "true";
+      }
+
+      if (userEditedOnInit === undefined) {
+        updateUserEditedState();
+      } else {
+        setMaskedEditorUserEdited(editor, userEditedOnInit);
+      }
+
+      adjustTextareaHeight(editor);
+    }
+
+    function setMaskedEditorAutoValue(editor, value) {
+      if (!editor) {
+        return;
+      }
+      if (editor.value !== value) {
+        editor.value = value;
+      }
+      setMaskedEditorUserEdited(editor, false);
+      adjustTextareaHeight(editor);
+    }
+
     function updateNoteDetailsDisplay(noteDetails) {
       if (!noteDetails) {
         return;
@@ -2086,7 +2231,7 @@
       );
     }
 
-    function refreshMaskedWordField() {
+    function refreshMaskedWordField({ force = false } = {}) {
       const maskedFieldName = activeModelFieldMetadata.roleMap?.masked;
       const wordFieldName = getActiveWordFieldName();
       if (!maskedFieldName || !wordFieldName) {
@@ -2099,8 +2244,13 @@
         return;
       }
 
-      maskedEditor.value = deriveMaskedWordValue(wordEditor.value);
-      adjustTextareaHeight(maskedEditor);
+      const trimmedMaskedValue = maskedEditor.value.trim();
+      if (!force && isMaskedEditorUserEdited(maskedEditor) && trimmedMaskedValue) {
+        return;
+      }
+
+      const derivedValue = deriveMaskedWordValue(wordEditor.value);
+      setMaskedEditorAutoValue(maskedEditor, derivedValue);
     }
 
     function applyModelFieldMetadata(
@@ -2196,17 +2346,17 @@
         const textarea = document.createElement("textarea");
         textarea.id = editorId;
         textarea.dataset.fieldName = maskedFieldName;
-        textarea.readOnly = true;
         textarea.value = previousValue;
         const labelText = maskedFieldName || "W•••";
         textarea.placeholder = labelText;
         textarea.setAttribute("aria-label", labelText);
         textarea.title = labelText;
-        textarea.addEventListener("input", () => adjustTextareaHeight(textarea));
+        initializeMaskedFieldEditor(textarea, {
+          userEditedOnInit: Boolean(previousValue.trim()),
+        });
 
         maskedFieldContainer.appendChild(textarea);
         maskedFieldContainer.hidden = false;
-        adjustTextareaHeight(textarea);
 
         fieldEditors.set(maskedFieldName, textarea);
         assignedFields.add(maskedFieldName);
@@ -2231,27 +2381,23 @@
           textarea.dataset.fieldName = fieldName;
           textarea.value = preservedValues.get(fieldName) ?? "";
           if (fieldName === maskedFieldName) {
-            textarea.readOnly = true;
+            initializeMaskedFieldEditor(textarea, {
+              userEditedOnInit: Boolean((textarea.value || "").trim()),
+            });
+          } else {
+            textarea.addEventListener("input", () => adjustTextareaHeight(textarea));
+            adjustTextareaHeight(textarea);
           }
-          textarea.addEventListener("input", () => adjustTextareaHeight(textarea));
 
           wrapper.appendChild(label);
           wrapper.appendChild(textarea);
           additionalFieldsContainer.appendChild(wrapper);
-          adjustTextareaHeight(textarea);
 
           fieldEditors.set(fieldName, textarea);
           additionalFieldEditors.set(fieldName, { element: textarea, label, wrapper });
         });
 
         additionalFieldsContainer.hidden = additionalFieldEditors.size === 0;
-      }
-
-      if (maskedFieldName) {
-        const maskedEditor = fieldEditors.get(maskedFieldName);
-        if (maskedEditor) {
-          maskedEditor.readOnly = true;
-        }
       }
 
       activeModelFieldMetadata = {
@@ -2273,7 +2419,16 @@
       }
 
       refreshMaskedWordField();
-      fieldEditors.forEach((editor) => adjustTextareaHeight(editor));
+      fieldEditors.forEach((editor, fieldName) => {
+        if (!editor) {
+          return;
+        }
+        if (fieldName === maskedFieldName && !isMaskedEditorUserEdited(editor)) {
+          setMaskedEditorAutoValue(editor, editor.value || "");
+        } else {
+          adjustTextareaHeight(editor);
+        }
+      });
     }
 
     async function ensureModelFieldMetadata(modelName) {
@@ -2673,12 +2828,19 @@
       applyModelFieldMetadata(modelName, fieldNames, noteDetails.roleMap);
 
       const fields = noteDetails.fields || {};
+      const maskedFieldName = activeModelFieldMetadata.roleMap?.masked;
       fieldEditors.forEach((editor, fieldName) => {
         if (!editor) {
           return;
         }
         editor.value = fields[fieldName] || "";
-        adjustTextareaHeight(editor);
+        if (fieldName === maskedFieldName) {
+          initializeMaskedFieldEditor(editor, {
+            userEditedOnInit: Boolean((editor.value || "").trim()),
+          });
+        } else {
+          adjustTextareaHeight(editor);
+        }
       });
 
       noteDetails.modelName = modelName;
@@ -2698,8 +2860,6 @@
       }
 
       refreshMaskedWordField();
-
-      const maskedFieldName = activeModelFieldMetadata.roleMap?.masked;
       if (maskedFieldName) {
         const maskedEditor = fieldEditors.get(maskedFieldName);
         if (maskedEditor) {
@@ -3117,6 +3277,11 @@
                   );
                   exampleField.value = maskedExample;
                   adjustTextareaHeight(exampleField);
+                  if (frontField && !frontField.value.trim()) {
+                    frontField.value = entry.word || lookupTerm;
+                    adjustTextareaHeight(frontField);
+                  }
+                  refreshMaskedWordField();
                   const message = entry.isExistingNote
                     ? "Example added from existing card. Ready to create a new card."
                     : "Example added to the card";
@@ -3147,7 +3312,7 @@
               );
               backField.value = maskedDefinition;
               adjustTextareaHeight(backField);
-              if (!entry.isExistingNote && frontField) {
+              if (frontField && !frontField.value.trim()) {
                 frontField.value = entry.word || lookupTerm;
                 adjustTextareaHeight(frontField);
               }
@@ -3540,14 +3705,16 @@
       }
 
       const maskedFieldName = roleMap.masked || activeModelFieldMetadata.roleMap?.masked;
-      if (maskedFieldName && wordFieldName) {
-        const maskedValue = deriveMaskedWordValue(wordValue);
-        fields[maskedFieldName] = maskedValue;
+      if (maskedFieldName) {
         const maskedEditor = fieldEditors.get(maskedFieldName);
-        if (maskedEditor) {
-          maskedEditor.value = maskedValue;
-          adjustTextareaHeight(maskedEditor);
+        let maskedValue = maskedEditor ? maskedEditor.value.trim() : fields[maskedFieldName] || "";
+        if (!maskedValue && wordFieldName && (!maskedEditor || !isMaskedEditorUserEdited(maskedEditor))) {
+          maskedValue = deriveMaskedWordValue(wordValue);
+          if (maskedEditor) {
+            setMaskedEditorAutoValue(maskedEditor, maskedValue);
+          }
         }
+        fields[maskedFieldName] = maskedValue;
       }
 
       try {
@@ -3575,7 +3742,57 @@
         }
       } catch (error) {
         console.error(error);
-        setStatus(error.message || "Failed to add card", "error");
+        const errorMessage = error?.message || "Failed to add card";
+        if (
+          typeof window !== "undefined" &&
+          errorMessage.toLowerCase().includes("cannot create note because it is a duplicate")
+        ) {
+          const shouldUpdate = window.confirm(
+            "An existing card has the same primary fields. Update the existing card instead?"
+          );
+          if (shouldUpdate) {
+            try {
+              const duplicateNoteId = await findDuplicateNoteId({
+                modelName,
+                wordFieldName,
+                wordValue,
+              });
+              if (!duplicateNoteId) {
+                setStatus(
+                  "Duplicate detected but the existing card could not be located for update.",
+                  "error"
+                );
+              } else {
+                await callAnkiConnect("updateNoteFields", {
+                  note: { id: duplicateNoteId, fields },
+                });
+                try {
+                  await callAnkiConnect("sync");
+                  setStatus(
+                    "Existing card updated and sync requested using Anki's saved session.",
+                    "success"
+                  );
+                } catch (syncError) {
+                  console.warn("Sync failed", syncError);
+                  setStatus(
+                    `Existing card updated but sync failed via saved session: ${syncError.message}`,
+                    "error"
+                  );
+                }
+              }
+            } catch (updateError) {
+              console.error(updateError);
+              setStatus(updateError.message || "Failed to update existing card", "error");
+            }
+          } else {
+            setStatus(
+              "Card was not added because an existing note already contains these primary fields.",
+              "error"
+            );
+          }
+        } else {
+          setStatus(errorMessage, "error");
+        }
       } finally {
         addCardBtn.disabled = false;
       }
