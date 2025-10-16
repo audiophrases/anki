@@ -25,32 +25,58 @@
     }
 
     .app {
-      --sidebar-width: clamp(260px, 24vw, 360px);
-      background: rgba(255, 255, 255, 0.92);
-      box-shadow: 0 20px 60px rgba(58, 75, 115, 0.25);
-      border-radius: 20px;
+      --note-sidebar-width: clamp(320px, 28vw, 420px);
+      --settings-sidebar-width: clamp(260px, 22vw, 340px);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 22px 68px rgba(30, 42, 68, 0.28);
+      border-radius: 28px;
       width: min(95vw, 1500px);
       display: grid;
-      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      grid-template-columns: var(--note-sidebar-width) minmax(0, 1fr) var(--settings-sidebar-width);
+      grid-template-areas: "note main settings";
+      align-items: stretch;
       overflow: hidden;
       position: relative;
       transition: grid-template-columns 0.3s ease;
     }
 
-    .sidebar {
+    .note-sidebar,
+    .settings-sidebar {
       padding: 2rem;
-      background: linear-gradient(180deg, #3f64c7, #4650ac);
-      color: white;
-      width: var(--sidebar-width);
       box-sizing: border-box;
-      transform: translateX(0);
+      height: 100%;
+      overflow-y: auto;
       transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s ease,
         width 0.3s ease;
       will-change: transform;
       z-index: 20;
     }
 
-    .sidebar-handle {
+    .note-sidebar {
+      grid-area: note;
+      background: linear-gradient(180deg, #f8f9ff, #eef0ff);
+      color: #1e2a44;
+      border-right: 1px solid rgba(63, 100, 199, 0.12);
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .note-sidebar .panel {
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 10px 30px rgba(43, 58, 92, 0.08);
+    }
+
+    .settings-sidebar {
+      grid-area: settings;
+      background: linear-gradient(180deg, #2f3f87, #3f64c7);
+      color: white;
+      border-left: 1px solid rgba(17, 29, 61, 0.18);
+    }
+
+    .sidebar-handle,
+    .note-sidebar-handle,
+    .settings-sidebar-handle {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -60,18 +86,24 @@
       background: linear-gradient(180deg, #3f64c7, #4650ac);
       position: absolute;
       top: clamp(1.5rem, 3vw, 3rem);
-      left: calc(var(--sidebar-width) + 1rem);
       box-shadow: 0 12px 36px rgba(63, 100, 199, 0.25);
-      transition: left 0.3s ease, opacity 0.3s ease;
+      transition: transform 0.3s ease, opacity 0.3s ease;
       z-index: 40;
     }
 
-    .app.is-sidebar-collapsed {
-      --sidebar-width: 0px;
-      grid-template-columns: 0 minmax(0, 1fr);
+    .note-sidebar-handle {
+      left: calc(var(--note-sidebar-width) + 1rem);
     }
 
-    .app.is-sidebar-collapsed .sidebar {
+    .settings-sidebar-handle {
+      right: calc(var(--settings-sidebar-width) + 1rem);
+    }
+
+    .app.is-note-collapsed {
+      grid-template-columns: 0 minmax(0, 1fr) var(--settings-sidebar-width);
+    }
+
+    .app.is-note-collapsed .note-sidebar {
       transform: translateX(-100%);
       width: 0;
       opacity: 0;
@@ -79,23 +111,93 @@
       pointer-events: none;
     }
 
-    .app.is-sidebar-collapsed .sidebar-handle {
+    .app.is-note-collapsed .note-sidebar-handle {
       left: 1.25rem;
       opacity: 0.95;
     }
 
-    .app.is-sidebar-collapsed .main {
+    .app.is-note-collapsed .main {
       padding-left: clamp(3.25rem, 5vw, 4rem);
     }
 
-    .sidebar h1 {
+    .app.is-settings-collapsed {
+      grid-template-columns: var(--note-sidebar-width) minmax(0, 1fr) 0;
+    }
+
+    .app.is-settings-collapsed .settings-sidebar {
+      transform: translateX(100%);
+      width: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .app.is-settings-collapsed .settings-sidebar-handle {
+      right: 1.25rem;
+      opacity: 0.95;
+    }
+
+    .app.is-settings-collapsed .main {
+      padding-right: clamp(3.25rem, 5vw, 4rem);
+    }
+
+    .sidebar-toggle {
+      width: 2.5rem;
+      height: 2.5rem;
+      border: none;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.22);
+      color: white;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+      padding: 0;
+    }
+
+    .sidebar-toggle::before {
+      font-size: 1rem;
+      line-height: 1;
+      transition: transform 0.2s ease;
+    }
+
+    .sidebar-toggle[data-side="note"]::before {
+      content: "❮";
+    }
+
+    .sidebar-toggle[data-side="note"][data-state="collapsed"]::before {
+      content: "❯";
+    }
+
+    .sidebar-toggle[data-side="settings"]::before {
+      content: "❯";
+    }
+
+    .sidebar-toggle[data-side="settings"][data-state="collapsed"]::before {
+      content: "❮";
+    }
+
+    .sidebar-toggle:hover,
+    .sidebar-toggle:focus-visible {
+      background: rgba(255, 255, 255, 0.35);
+      transform: translateX(-1px);
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65);
+    }
+
+    .app.is-note-collapsed .sidebar-toggle[data-side="note"],
+    .app.is-settings-collapsed .sidebar-toggle[data-side="settings"] {
+      transform: none;
+    }
+
+    .settings-sidebar h1 {
       margin-top: 0;
       margin-bottom: 1.5rem;
       font-size: 1.9rem;
       letter-spacing: 0.02em;
     }
 
-    .sidebar section + section {
+    .settings-sidebar section + section {
       margin-top: 2.5rem;
     }
 
@@ -151,6 +253,7 @@
     }
 
     .main {
+      grid-area: main;
       padding: 2rem 2.5rem;
       background: rgba(249, 250, 255, 0.9);
       display: flex;
@@ -161,52 +264,6 @@
       min-height: 0;
     }
 
-    .sidebar-toggle {
-      width: 2.5rem;
-      height: 2.5rem;
-      border: none;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.22);
-      color: white;
-      display: grid;
-      place-items: center;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-      padding: 0;
-    }
-
-    .sidebar-toggle::before {
-      content: "❮";
-      font-size: 1rem;
-      line-height: 1;
-      transition: transform 0.2s ease;
-    }
-
-    .sidebar-toggle[data-state="collapsed"]::before {
-      content: "❯";
-    }
-
-    .sidebar-toggle:hover,
-    .sidebar-toggle:focus-visible {
-      background: rgba(255, 255, 255, 0.35);
-      transform: translateX(-1px);
-      outline: none;
-      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65);
-    }
-
-    .app.is-sidebar-collapsed .sidebar-toggle {
-      width: 100%;
-      height: 100%;
-      border-radius: 0;
-      background: transparent;
-      transform: none;
-    }
-
-    .app.is-sidebar-collapsed .sidebar-toggle:hover,
-    .app.is-sidebar-collapsed .sidebar-toggle:focus-visible {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
     .panel {
       background: white;
       border-radius: 16px;
@@ -214,20 +271,6 @@
       box-shadow: 0 10px 30px rgba(43, 58, 92, 0.1);
     }
 
-    .dictionary-workspace {
-      display: grid;
-      gap: 1.5rem;
-      min-height: 0;
-      flex: 1 1 auto;
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-areas:
-        "note"
-        "dictionary";
-    }
-
-    .dictionary-workspace > .panel {
-      min-height: 0;
-    }
 
     #dictionary-panel {
       display: flex;
@@ -300,13 +343,8 @@
 
     @media (min-width: 1024px) {
       .app {
-        --sidebar-width: clamp(280px, 20vw, 360px);
-      }
-
-      .dictionary-workspace {
-        grid-template-columns: minmax(360px, 520px) minmax(0, 1fr);
-        grid-template-areas: "note dictionary";
-        align-items: stretch;
+        --note-sidebar-width: clamp(320px, 24vw, 420px);
+        --settings-sidebar-width: clamp(280px, 20vw, 340px);
       }
 
       #note-panel {
@@ -323,11 +361,8 @@
 
     @media (min-width: 1400px) {
       .app {
-        --sidebar-width: clamp(300px, 18vw, 380px);
-      }
-
-      .dictionary-workspace {
-        grid-template-columns: minmax(400px, 560px) minmax(0, 1fr);
+        --note-sidebar-width: clamp(340px, 22vw, 460px);
+        --settings-sidebar-width: clamp(300px, 18vw, 380px);
       }
     }
 
@@ -404,6 +439,12 @@
       margin-top: 1rem;
       display: grid;
       gap: 1rem;
+    }
+
+    .dictionary-helper {
+      margin: 0.35rem 0 0;
+      font-size: 0.85rem;
+      color: #4a5b8d;
     }
 
     .scope-toggle {
@@ -578,14 +619,41 @@
       gap: 0.45rem;
     }
 
+    .definition-actions {
+      display: grid;
+      gap: 0.4rem;
+      align-content: start;
+    }
+
+    .definition-actions button {
+      justify-self: start;
+    }
+
     .definition-text {
       font-size: 1rem;
       color: #1e2a44;
     }
 
+    .example-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .example-item {
+      display: grid;
+      gap: 0.35rem;
+    }
+
     .example-text {
       font-style: italic;
       color: #42507b;
+    }
+
+    .example-item button {
+      justify-self: start;
     }
 
     .synonym-cloud {
@@ -643,49 +711,59 @@
         min-height: calc(100vh - 2rem);
       }
 
-      .sidebar {
+      .note-sidebar,
+      .settings-sidebar {
         position: absolute;
         top: 0;
-        left: 0;
         bottom: 0;
-        max-width: min(320px, 90vw);
-        width: min(320px, 90vw);
+        max-width: min(320px, 92vw);
+        width: min(320px, 92vw);
         height: 100%;
         overflow-y: auto;
-        border-bottom-left-radius: 16px;
-        border-bottom-right-radius: 16px;
         box-shadow: 0 24px 48px rgba(58, 75, 115, 0.35);
-        transform: translateX(-100%);
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
       }
 
-      .sidebar-handle {
-        position: fixed;
-        top: 1.25rem;
-        right: 1.25rem;
-        min-width: auto;
-        width: auto;
-        height: auto;
-        background: transparent;
-        z-index: 60;
+      .note-sidebar {
+        left: 0;
+        border-radius: 0 16px 16px 0;
+        transform: translateX(-100%);
       }
 
-      .app:not(.is-sidebar-collapsed) .sidebar {
+      .settings-sidebar {
+        right: 0;
+        border-radius: 16px 0 0 16px;
+        transform: translateX(100%);
+      }
+
+      .app:not(.is-note-collapsed) .note-sidebar {
         transform: translateX(0);
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
       }
 
-      .app.is-sidebar-collapsed {
-        grid-template-columns: 1fr;
+      .app:not(.is-settings-collapsed) .settings-sidebar {
+        transform: translateX(0);
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
       }
 
-      .app.is-sidebar-collapsed .sidebar-handle {
-        min-width: auto;
-        opacity: 1;
+      .note-sidebar-handle,
+      .settings-sidebar-handle {
+        position: fixed;
+        top: 1.25rem;
+      }
+
+      .note-sidebar-handle {
+        left: 1.25rem;
+      }
+
+      .settings-sidebar-handle {
+        right: 1.25rem;
       }
 
       .main {
@@ -693,7 +771,8 @@
       }
 
       .sidebar-toggle,
-      .app.is-sidebar-collapsed .sidebar-toggle {
+      .app.is-note-collapsed .sidebar-toggle[data-side="note"],
+      .app.is-settings-collapsed .sidebar-toggle[data-side="settings"] {
         width: 3rem;
         height: 3rem;
         border-radius: 999px;
@@ -711,52 +790,53 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar" id="sidebar">
-      <h1>Anki Card Creator</h1>
-      <section>
-        <label for="anki-username">AnkiWeb Username</label>
-        <input type="text" id="anki-username" placeholder="name@example.com" autocomplete="username" />
-        <label for="anki-password" style="margin-top: 1rem;">AnkiWeb Password</label>
-        <input type="password" id="anki-password" placeholder="••••••••" autocomplete="current-password" />
-      </section>
-
-      <section>
-        <label for="deck-select">Deck</label>
-        <div class="split">
-          <select id="deck-select">
-            <option value="" disabled selected>Load decks via AnkiConnect</option>
-          </select>
-          <button id="load-decks">Load Decks</button>
+    <aside class="note-sidebar" id="note-sidebar" aria-label="Note editor">
+      <section class="panel note-panel" id="note-panel">
+        <div class="note-grid">
+          <div class="note-field note-field--word">
+            <textarea
+              id="front-field"
+              placeholder="Word"
+              aria-label="Word"
+              title="Word"
+            ></textarea>
+          </div>
+          <div class="note-field note-field--masked" id="masked-field-container" hidden></div>
+          <div class="note-field note-field--definition">
+            <textarea
+              id="back-field"
+              placeholder="Definition"
+              aria-label="Definition"
+              title="Definition"
+            ></textarea>
+          </div>
+          <div class="note-field note-field--example" id="example-field-wrapper">
+            <textarea
+              id="example-field"
+              placeholder="Example"
+              aria-label="Example"
+              title="Example"
+            ></textarea>
+          </div>
         </div>
-      </section>
-
-      <section>
-        <label for="model-name">Note Type</label>
-        <input type="text" id="model-name" value="Basic" list="model-suggestions" />
-        <datalist id="model-suggestions"></datalist>
-        <label for="tags" style="margin-top: 1rem;">Tags (comma separated)</label>
-        <input type="text" id="tags" placeholder="vocab, dictionary" />
-      </section>
-
-      <section>
-        <p style="margin-top: 0; font-weight: 600;">Dictionary resources</p>
-        <p style="font-size: 0.85rem; line-height: 1.5; color: rgba(255, 255, 255, 0.9);">
-          Built-in lookups use the Free Dictionary API, Wiktionary, and Datamuse for synonyms—no
-          API keys required. Enable or disable providers from the dictionary panel to customise
-          results.
-        </p>
+        <div class="additional-fields" id="additional-fields" hidden></div>
+        <div class="note-actions">
+          <button id="add-card">Add Card to Deck</button>
+          <span class="status" id="status"></span>
+        </div>
       </section>
     </aside>
 
-    <div class="sidebar-handle">
+    <div class="note-sidebar-handle">
       <button
-        id="sidebar-toggle"
+        id="note-sidebar-toggle"
         class="sidebar-toggle"
         type="button"
-        aria-controls="sidebar"
+        aria-controls="note-sidebar"
         aria-expanded="true"
         data-state="expanded"
-        aria-label="Hide sidebar"
+        data-side="note"
+        aria-label="Hide note editor"
       ></button>
     </div>
 
@@ -801,68 +881,86 @@
         </p>
       </section>
 
-      <div class="dictionary-workspace">
-        <section class="panel note-panel" id="note-panel">
-          <div class="note-grid">
-            <div class="note-field note-field--word">
-              <textarea
-                id="front-field"
-                placeholder="Word"
-                aria-label="Word"
-                title="Word"
-              ></textarea>
-            </div>
-            <div class="note-field note-field--masked" id="masked-field-container" hidden></div>
-            <div class="note-field note-field--definition">
-              <textarea
-                id="back-field"
-                placeholder="Definition"
-                aria-label="Definition"
-                title="Definition"
-              ></textarea>
-            </div>
-            <div class="note-field note-field--example" id="example-field-wrapper">
-              <textarea
-                id="example-field"
-                placeholder="Example"
-                aria-label="Example"
-                title="Example"
-              ></textarea>
+      <section class="panel" id="dictionary-panel">
+        <h2>Dictionary Lookup</h2>
+        <div class="dictionary-controls">
+          <input type="text" id="lookup-term" placeholder="Search term" />
+          <button id="search-dictionary">Search</button>
+        </div>
+        <div class="dictionary-settings">
+          <div>
+            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Search scope</p>
+            <div class="scope-toggle" role="group" aria-label="Search scope">
+              <button type="button" class="is-active" data-scope="online-decks">Online + decks</button>
+              <button type="button" data-scope="online-only">Online only</button>
+              <button type="button" data-scope="decks-only">Decks only</button>
             </div>
           </div>
-          <div class="additional-fields" id="additional-fields" hidden></div>
-          <div class="note-actions">
-            <button id="add-card">Add Card to Deck</button>
-            <span class="status" id="status"></span>
+          <div>
+            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Dictionaries</p>
+            <div class="dictionary-provider-grid" id="dictionary-provider-grid"></div>
           </div>
-        </section>
-
-        <section class="panel" id="dictionary-panel">
-          <h2>Dictionary Lookup</h2>
-          <div class="dictionary-controls">
-            <input type="text" id="lookup-term" placeholder="Search term" />
-            <button id="search-dictionary">Search</button>
+          <div>
+            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Existing cards deck</p>
+            <select id="existing-deck-select">
+              <option value="current" selected>Current deck</option>
+            </select>
+            <p class="dictionary-helper">Look in another deck to load or copy an existing card.</p>
           </div>
-          <div class="dictionary-settings">
-            <div>
-              <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Search scope</p>
-              <div class="scope-toggle" role="group" aria-label="Search scope">
-                <button type="button" class="is-active" data-scope="online-decks">Online + decks</button>
-                <button type="button" data-scope="online-only">Online only</button>
-                <button type="button" data-scope="decks-only">Decks only</button>
-              </div>
-            </div>
-            <div>
-              <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Dictionaries</p>
-              <div class="dictionary-provider-grid" id="dictionary-provider-grid"></div>
-            </div>
-          </div>
-          <div class="suggestions" id="spelling-suggestions" hidden></div>
-          <div class="dictionary-results" id="dictionary-results"></div>
-        </section>
-      </div>
-
+        </div>
+        <div class="suggestions" id="spelling-suggestions" hidden></div>
+        <div class="dictionary-results" id="dictionary-results"></div>
+      </section>
     </main>
+
+    <div class="settings-sidebar-handle">
+      <button
+        id="settings-sidebar-toggle"
+        class="sidebar-toggle"
+        type="button"
+        aria-controls="settings-sidebar"
+        aria-expanded="true"
+        data-state="expanded"
+        data-side="settings"
+        aria-label="Hide settings"
+      ></button>
+    </div>
+
+    <aside class="settings-sidebar" id="settings-sidebar">
+      <h1>Anki Card Creator</h1>
+      <section>
+        <label for="anki-username">AnkiWeb Username</label>
+        <input type="text" id="anki-username" placeholder="name@example.com" autocomplete="username" />
+        <label for="anki-password" style="margin-top: 1rem;">AnkiWeb Password</label>
+        <input type="password" id="anki-password" placeholder="••••••••" autocomplete="current-password" />
+      </section>
+
+      <section>
+        <label for="deck-select">Deck</label>
+        <div class="split">
+          <select id="deck-select">
+            <option value="" disabled selected>Load decks via AnkiConnect</option>
+          </select>
+          <button id="load-decks">Load Decks</button>
+        </div>
+      </section>
+
+      <section>
+        <label for="model-name">Note Type</label>
+        <input type="text" id="model-name" value="Basic" list="model-suggestions" />
+        <datalist id="model-suggestions"></datalist>
+        <label for="tags" style="margin-top: 1rem;">Tags (comma separated)</label>
+        <input type="text" id="tags" placeholder="vocab, dictionary" />
+      </section>
+
+      <section>
+        <p style="margin-top: 0; font-weight: 600;">Dictionary resources</p>
+        <p style="font-size: 0.85rem; line-height: 1.5; color: rgba(255, 255, 255, 0.9);">
+          Built-in lookups use Wiktionary and Datamuse for synonyms—no API keys required. Enable or
+          disable providers from the dictionary panel to customise results.
+        </p>
+      </section>
+    </aside>
   </div>
 
   <script>
@@ -872,6 +970,7 @@
     const searchButton = document.getElementById("search-dictionary");
     const dictionaryProviderGrid = document.getElementById("dictionary-provider-grid");
     const dictionaryResults = document.getElementById("dictionary-results");
+    const existingDeckSelect = document.getElementById("existing-deck-select");
     const spellingSuggestions = document.getElementById("spelling-suggestions");
     const frontField = document.getElementById("front-field");
     const backField = document.getElementById("back-field");
@@ -889,8 +988,10 @@
     const setupNotice = document.getElementById("setup-notice");
     const scopeToggleButtons = document.querySelectorAll(".scope-toggle button");
     const appContainer = document.querySelector(".app");
-    const sidebar = document.getElementById("sidebar");
-    const sidebarToggle = document.getElementById("sidebar-toggle");
+    const noteSidebar = document.getElementById("note-sidebar");
+    const settingsSidebar = document.getElementById("settings-sidebar");
+    const noteSidebarToggle = document.getElementById("note-sidebar-toggle");
+    const settingsSidebarToggle = document.getElementById("settings-sidebar-toggle");
 
     const DEFAULT_FIELD_PLACEHOLDERS = {
       front: "Word",
@@ -917,7 +1018,8 @@
     const LOCAL_STORAGE_KEYS = {
       providerSelection: "anki.dictionary.providers",
       searchScope: "anki.dictionary.scope",
-      sidebarCollapsed: "anki.ui.sidebarCollapsed",
+      noteSidebarCollapsed: "anki.ui.noteSidebarCollapsed",
+      settingsSidebarCollapsed: "anki.ui.settingsSidebarCollapsed",
     };
 
     const DEFAULT_MODEL_NAME = "Basic";
@@ -945,6 +1047,7 @@
     };
     const fieldEditors = new Map();
     const additionalFieldEditors = new Map();
+    let availableDeckNames = [];
     const PART_OF_SPEECH_ALIASES = {
       noun: ["noun", "n", "n.", "countable noun", "uncountable noun", "plural noun"],
       verb: ["verb", "v", "v.", "transitive verb", "intransitive verb", "phrasal verb"],
@@ -1047,11 +1150,6 @@
       }
     }
 
-    const SIDEBAR_TOGGLE_LABELS = {
-      expanded: "Hide sidebar",
-      collapsed: "Show sidebar",
-    };
-
     const focusableSidebarSelector = [
       "button:not([disabled])",
       "input:not([disabled])",
@@ -1061,106 +1159,101 @@
       "[tabindex]:not([tabindex='-1'])",
     ].join(", ");
 
-    function applySidebarCollapsedState(
-      collapsed,
-      { shouldStore = true, shouldFocus = false } = {}
-    ) {
-      if (!appContainer || !sidebarToggle) {
+    function setupSidebarToggle({
+      toggleButton,
+      target,
+      collapsedClass,
+      storageKey,
+      expandedLabel,
+      collapsedLabel,
+      defaultCollapsedMediaQuery,
+    }) {
+      if (!appContainer || !toggleButton || !target) {
         return;
       }
 
-      appContainer.classList.toggle("is-sidebar-collapsed", collapsed);
-      sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
-      sidebarToggle.setAttribute(
-        "aria-label",
-        collapsed
-          ? SIDEBAR_TOGGLE_LABELS.collapsed
-          : SIDEBAR_TOGGLE_LABELS.expanded
-      );
-      sidebarToggle.setAttribute(
-        "data-state",
-        collapsed ? "collapsed" : "expanded"
-      );
-
-      if (shouldStore) {
-        setLocalStorageItem(
-          LOCAL_STORAGE_KEYS.sidebarCollapsed,
-          collapsed ? "true" : "false"
+      const applyState = (
+        collapsed,
+        { shouldStore = true, shouldFocus = false } = {}
+      ) => {
+        appContainer.classList.toggle(collapsedClass, collapsed);
+        toggleButton.setAttribute("aria-expanded", String(!collapsed));
+        toggleButton.setAttribute("data-state", collapsed ? "collapsed" : "expanded");
+        toggleButton.setAttribute(
+          "aria-label",
+          collapsed ? collapsedLabel : expandedLabel
         );
-      }
 
-      if (shouldFocus) {
-        if (collapsed) {
-          sidebarToggle.focus();
-          return;
+        if (shouldStore && storageKey) {
+          setLocalStorageItem(storageKey, collapsed ? "true" : "false");
         }
 
-        const focusTarget =
-          (sidebar && sidebar.querySelector(focusableSidebarSelector)) ||
-          sidebar;
+        if (shouldFocus) {
+          if (collapsed) {
+            toggleButton.focus();
+            return;
+          }
 
-        if (focusTarget) {
-          if (focusTarget === sidebar && !sidebar.hasAttribute("tabindex")) {
-            sidebar.setAttribute("tabindex", "-1");
+          const focusTarget = target.querySelector(focusableSidebarSelector) || target;
+          if (focusTarget === target && !target.hasAttribute("tabindex")) {
+            target.setAttribute("tabindex", "-1");
           }
           focusTarget.focus();
         }
-      }
-    }
+      };
 
-    function toggleSidebarState() {
-      if (!appContainer) {
-        return;
-      }
-
-      const currentlyCollapsed = appContainer.classList.contains(
-        "is-sidebar-collapsed"
-      );
-      applySidebarCollapsedState(!currentlyCollapsed, { shouldFocus: true });
-    }
-
-    function initializeSidebarToggle() {
-      if (!appContainer || !sidebar || !sidebarToggle) {
-        return;
-      }
-
-      const storedPreference = getLocalStorageItem(
-        LOCAL_STORAGE_KEYS.sidebarCollapsed
-      );
+      const storedPreference = storageKey ? getLocalStorageItem(storageKey) : null;
       let collapsed = storedPreference === "true";
 
-      if (storedPreference === null && window.matchMedia) {
+      if (storedPreference === null && defaultCollapsedMediaQuery && window.matchMedia) {
         try {
-          collapsed = window.matchMedia("(max-width: 980px)").matches;
+          collapsed = window.matchMedia(defaultCollapsedMediaQuery).matches;
         } catch (error) {
           collapsed = false;
         }
       }
 
-      applySidebarCollapsedState(collapsed, { shouldStore: false });
+      applyState(collapsed, { shouldStore: false });
 
-      sidebarToggle.addEventListener("click", () => {
-        toggleSidebarState();
-      });
+      const toggle = () => {
+        const isCollapsed = appContainer.classList.contains(collapsedClass);
+        applyState(!isCollapsed, { shouldFocus: true });
+      };
 
-      sidebarToggle.addEventListener("keydown", (event) => {
+      toggleButton.addEventListener("click", toggle);
+      toggleButton.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          toggleSidebarState();
+          toggle();
         }
       });
 
-      if (sidebar) {
-        sidebar.addEventListener("keydown", (event) => {
-          if (
-            event.key === "Escape" &&
-            !appContainer.classList.contains("is-sidebar-collapsed")
-          ) {
-            event.preventDefault();
-            applySidebarCollapsedState(true, { shouldFocus: true });
-          }
-        });
-      }
+      target.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !appContainer.classList.contains(collapsedClass)) {
+          event.preventDefault();
+          applyState(true, { shouldFocus: true });
+        }
+      });
+    }
+
+    function initializeSidebarToggles() {
+      setupSidebarToggle({
+        toggleButton: noteSidebarToggle,
+        target: noteSidebar,
+        collapsedClass: "is-note-collapsed",
+        storageKey: LOCAL_STORAGE_KEYS.noteSidebarCollapsed,
+        expandedLabel: "Hide note editor",
+        collapsedLabel: "Show note editor",
+      });
+
+      setupSidebarToggle({
+        toggleButton: settingsSidebarToggle,
+        target: settingsSidebar,
+        collapsedClass: "is-settings-collapsed",
+        storageKey: LOCAL_STORAGE_KEYS.settingsSidebarCollapsed,
+        expandedLabel: "Hide settings",
+        collapsedLabel: "Show settings",
+      });
     }
 
     function canonicalizePartOfSpeech(label) {
@@ -1426,6 +1519,17 @@
       statusEl.className = "status" + (type ? " " + type : "");
     }
 
+    function parseTagsFromInput() {
+      if (!tagsInput) {
+        return [];
+      }
+
+      return tagsInput.value
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+    }
+
     function hideSetupNotice() {
       if (setupNotice) {
         setupNotice.classList.add("is-hidden");
@@ -1517,6 +1621,7 @@
       persistDeckSelection();
       userModifiedNoteType = false;
       const deckName = deckSelect.value;
+      updateExistingDeckSelectOptions();
       if (deckName) {
         loadNoteTypesForDeck(deckName);
       } else {
@@ -1559,15 +1664,58 @@
       return text && term && text.toLowerCase().includes(term.toLowerCase());
     }
 
-    function cleanExample(example) {
-      if (!example) {
-        return "";
+    function collectExampleStrings(example, results = []) {
+      if (example === null || example === undefined) {
+        return results;
       }
-      const cleaned = stripHtml(example)
-        .replace(/\s+/g, " ")
-        .replace(/[\[\]]/g, "")
-        .trim();
-      return cleaned;
+
+      const target = Array.isArray(results) ? results : [];
+      const pushClean = (value) => {
+        if (!value) {
+          return;
+        }
+        const cleaned = stripHtml(value)
+          .replace(/\s+/g, " ")
+          .replace(/[\[\]]/g, "")
+          .trim();
+        if (cleaned) {
+          target.push(cleaned);
+        }
+      };
+
+      if (typeof example === "string") {
+        pushClean(example);
+        return target;
+      }
+
+      if (Array.isArray(example)) {
+        example.forEach((entry) => collectExampleStrings(entry, target));
+        return target;
+      }
+
+      if (typeof example === "object") {
+        const keysToInspect = [
+          "text",
+          "example",
+          "examples",
+          "quote",
+          "quotes",
+          "quotation",
+          "contents",
+        ];
+        keysToInspect.forEach((key) => {
+          if (key in example) {
+            collectExampleStrings(example[key], target);
+          }
+        });
+      }
+
+      return target;
+    }
+
+    function cleanExample(example) {
+      const examples = collectExampleStrings(example);
+      return examples.length ? examples[0] : "";
     }
 
     function normalizeDefinitions(definitions = []) {
@@ -1588,134 +1736,30 @@
           }
 
           let example = "";
+          let examples = [];
+          const exampleAccumulator = [];
           if (item && typeof item === "object") {
-            if (typeof item.example === "string") {
-              example = cleanExample(item.example);
-            } else if (Array.isArray(item.examples) && item.examples.length) {
-              example = cleanExample(item.examples[0]);
+            const exampleSources = [item.example, item.examples, item.quotes, item.quote];
+            exampleSources.forEach((source) => {
+              collectExampleStrings(source, exampleAccumulator);
+            });
+            if (Array.isArray(item.examples) && item.examples.length) {
+              collectExampleStrings(item.examples, exampleAccumulator);
             }
+            if (!exampleAccumulator.length && item.example) {
+              exampleAccumulator.push(cleanExample(item.example));
+            }
+            examples = Array.from(
+              new Set(exampleAccumulator.filter((entry) => typeof entry === "string" && entry.trim()))
+            );
+            example = examples[0] || "";
+          } else if (example) {
+            examples = [example];
           }
 
-          return { definition, example };
+          return { definition, example, examples };
         })
         .filter(Boolean);
-    }
-
-    function extractNodeText(node) {
-      if (!node) {
-        return "";
-      }
-      return node.textContent.replace(/\s+/g, " ").trim();
-    }
-
-    function queryTextContent(root, selectors) {
-      if (!root || !selectors) {
-        return "";
-      }
-
-      const selectorList = Array.isArray(selectors) ? selectors : [selectors];
-      for (const selector of selectorList) {
-        if (!selector) {
-          continue;
-        }
-        const element = root.querySelector(selector);
-        const text = extractNodeText(element);
-        if (text) {
-          return text;
-        }
-      }
-
-      return "";
-    }
-
-
-    function extractPrimaryPhonetic(phonetics = []) {
-      if (!Array.isArray(phonetics)) {
-        return "";
-      }
-
-      for (const phonetic of phonetics) {
-        if (phonetic && typeof phonetic.text === "string" && phonetic.text.trim()) {
-          return phonetic.text.trim();
-        }
-      }
-
-      return "";
-    }
-
-    function normalizeFreeDictionaryEntries(payload, term) {
-      if (!Array.isArray(payload) || !payload.length) {
-        return [];
-      }
-
-      return payload
-        .map((entry) => {
-          if (!entry || !Array.isArray(entry.meanings) || !entry.meanings.length) {
-            return null;
-          }
-
-          const meanings = entry.meanings
-            .map((meaning) => {
-              const normalizedDefinitions = normalizeDefinitions(
-                Array.isArray(meaning.definitions) ? meaning.definitions : []
-              );
-              if (!normalizedDefinitions.length) {
-                return null;
-              }
-
-              return {
-                partOfSpeech: meaning.partOfSpeech || "Definition",
-                definitions: normalizedDefinitions,
-              };
-            })
-            .filter(Boolean);
-
-          if (!meanings.length) {
-            return null;
-          }
-
-          return {
-            word: entry.word || term,
-            phonetic: extractPrimaryPhonetic(entry.phonetics),
-            source: "Free Dictionary",
-            meanings,
-          };
-        })
-        .filter(Boolean);
-    }
-
-    async function fetchFreeDictionaryEntries(term, parsedTerm) {
-      const lookup = parsedTerm?.term || term;
-      if (!lookup) {
-        return [];
-      }
-
-      let response;
-      try {
-        response = await fetch(
-          `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(lookup)}`,
-          {
-            headers: { Accept: "application/json" },
-          }
-        );
-      } catch (networkError) {
-        throw new Error("Free Dictionary lookup failed (network error)");
-      }
-
-      if (response.status === 404) {
-        return [];
-      }
-
-      if (!response.ok) {
-        throw new Error(`Free Dictionary lookup failed (status ${response.status})`);
-      }
-
-      const data = await response.json();
-      if (!Array.isArray(data)) {
-        return [];
-      }
-
-      return normalizeFreeDictionaryEntries(data, lookup);
     }
 
     function normalizeWiktionaryRestEntries(payload, term) {
@@ -1750,9 +1794,12 @@
                   ? definitionEntry.glosses[0]
                   : definitionEntry.text || "");
 
-              const entryExample = Array.isArray(definitionEntry.examples)
-                ? definitionEntry.examples[0]
-                : definitionEntry.example || "";
+              const entryExample = cleanExample([
+                definitionEntry.example,
+                definitionEntry.examples,
+                definitionEntry.quotes,
+                definitionEntry.quote,
+              ]);
 
               definitionList.push({
                 definition: entryDefinition,
@@ -1777,15 +1824,20 @@
               if (typeof textEntry === "string") {
                 definitionList.push({ definition: textEntry });
               } else {
+                const exampleSources = [
+                  textEntry.example,
+                  textEntry.examples,
+                  textEntry.quotes,
+                  textEntry.quote,
+                ];
                 definitionList.push({
                   definition:
                     textEntry.definition ||
                     textEntry.meaning ||
                     textEntry.text ||
                     "",
-                  example: Array.isArray(textEntry.examples)
-                    ? textEntry.examples[0]
-                    : textEntry.example || "",
+                  example: cleanExample(exampleSources),
+                  examples: collectExampleStrings(exampleSources),
                 });
               }
             });
@@ -1902,14 +1954,6 @@
     }
 
     const dictionaryProviders = {
-      freedictionary: {
-        id: "freedictionary",
-        label: "Free Dictionary",
-        fetchEntries: fetchFreeDictionaryEntries,
-        supportsEmbeddedSearch: false,
-        defaultEnabled: true,
-        type: "definition",
-      },
       wiktionary: {
         id: "wiktionary",
         label: "Wiktionary",
@@ -1928,7 +1972,7 @@
       },
     };
 
-    initializeSidebarToggle();
+    initializeSidebarToggles();
     initializeScopeButtons();
     initializeDictionaryProviderOptions();
 
@@ -2568,6 +2612,98 @@
         .filter(Boolean);
     }
 
+    function determineDeckSelectionLabel() {
+      if (!existingDeckSelect) {
+        return deckSelect.value || "Selected deck";
+      }
+
+      const selection = existingDeckSelect.value || "current";
+      const currentDeckName = deckSelect.value;
+
+      if (selection === "current") {
+        return currentDeckName ? `Current deck (${currentDeckName})` : "Current deck";
+      }
+
+      if (selection === "__all__") {
+        return "All decks";
+      }
+
+      return selection;
+    }
+
+    function updateExistingDeckSelectOptions() {
+      if (!existingDeckSelect) {
+        return;
+      }
+
+      const previousValue = existingDeckSelect.value || "current";
+      const currentDeckName = deckSelect.value;
+      existingDeckSelect.innerHTML = "";
+
+      const makeOption = (value, label) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        return option;
+      };
+
+      const currentLabel = currentDeckName
+        ? `Current deck (${currentDeckName})`
+        : "Current deck";
+      existingDeckSelect.appendChild(makeOption("current", currentLabel));
+
+      const otherDecks = Array.isArray(availableDeckNames)
+        ? availableDeckNames.filter((deck) => deck && deck !== currentDeckName)
+        : [];
+
+      if (otherDecks.length > 1) {
+        existingDeckSelect.appendChild(makeOption("__all__", "All decks"));
+      }
+
+      otherDecks.forEach((deckName) => {
+        existingDeckSelect.appendChild(makeOption(deckName, deckName));
+      });
+
+      const availableValues = Array.from(existingDeckSelect.options).map(
+        (option) => option.value
+      );
+      if (availableValues.includes(previousValue)) {
+        existingDeckSelect.value = previousValue;
+      } else {
+        existingDeckSelect.value = "current";
+      }
+    }
+
+    async function findDeckEntriesForSelection(term) {
+      const selection = existingDeckSelect ? existingDeckSelect.value || "current" : "current";
+      const currentDeckName = deckSelect.value;
+
+      if (selection === "current" || !existingDeckSelect) {
+        if (!currentDeckName) {
+          return [];
+        }
+        const summary = await findDeckEntries(term, currentDeckName);
+        return [summary];
+      }
+
+      if (selection === "__all__") {
+        const decksToSearch = Array.isArray(availableDeckNames)
+          ? availableDeckNames.filter((deck) => deck && deck !== currentDeckName)
+          : [];
+        const uniqueDecks = Array.from(new Set(decksToSearch));
+        if (!uniqueDecks.length) {
+          return [];
+        }
+        const summaries = await Promise.all(
+          uniqueDecks.map((deckName) => findDeckEntries(term, deckName))
+        );
+        return summaries;
+      }
+
+      const summary = await findDeckEntries(term, selection);
+      return [summary];
+    }
+
     async function findDeckEntries(term, deckName) {
       if (!deckName) {
         return {
@@ -2785,6 +2921,45 @@
       refreshMaskedWordField();
     }
 
+    async function copyExistingNoteToDeck(noteDetails, deckName, additionalTags = []) {
+      if (!noteDetails || !noteDetails.fields) {
+        throw new Error("This note cannot be copied.");
+      }
+
+      if (!deckName) {
+        throw new Error("Please choose a deck before copying.");
+      }
+
+      const modelName = noteDetails.modelName || activeModelFieldMetadata.modelName || "";
+      if (!modelName) {
+        throw new Error("Unable to determine the note type for this card.");
+      }
+
+      const fields = {};
+      Object.entries(noteDetails.fields).forEach(([fieldName, value]) => {
+        fields[fieldName] = typeof value === "string" ? value : "";
+      });
+
+      const baseTags = Array.isArray(noteDetails.tags) ? noteDetails.tags : [];
+      const extraTags = Array.isArray(additionalTags) ? additionalTags : [];
+      const mergedTags = Array.from(
+        new Set(
+          [...baseTags, ...extraTags]
+            .map((tag) => (tag || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      await callAnkiConnect("addNote", {
+        note: {
+          deckName,
+          modelName,
+          fields,
+          tags: mergedTags,
+        },
+      });
+    }
+
     function createMaskFromMatch(match) {
       if (!match) {
         return match;
@@ -2952,8 +3127,9 @@
       loadDecksBtn.disabled = true;
       try {
         const deckNames = await callAnkiConnect("deckNames");
+        availableDeckNames = Array.isArray(deckNames) ? deckNames.slice() : [];
         deckSelect.innerHTML = "";
-        if (!deckNames.length) {
+        if (!Array.isArray(deckNames) || !deckNames.length) {
           const option = document.createElement("option");
           option.textContent = "No decks found";
           option.disabled = true;
@@ -2975,11 +3151,13 @@
           const savedDeck = getSessionItem(SESSION_KEYS.deck);
           if (savedDeck && deckNames.includes(savedDeck)) {
             deckSelect.value = savedDeck;
+            updateExistingDeckSelectOptions();
             persistDeckSelection();
             await loadNoteTypesForDeck(savedDeck);
             return;
           }
         }
+        updateExistingDeckSelectOptions();
         updateModelSuggestions([]);
         await refreshModelFieldsForCurrentModel();
         setStatus("Decks loaded", "success");
@@ -3084,6 +3262,43 @@
         });
         actions.appendChild(loadButton);
 
+        const copyButton = document.createElement("button");
+        copyButton.type = "button";
+        copyButton.textContent = "Copy to current deck";
+        copyButton.addEventListener("click", async () => {
+          const targetDeckName = deckSelect.value;
+          if (!targetDeckName) {
+            setStatus("Please choose a deck before copying.", "error");
+            deckSelect.focus();
+            return;
+          }
+
+          try {
+            setStatus(`Copying card to "${targetDeckName}"…`);
+            copyButton.disabled = true;
+            await copyExistingNoteToDeck(entry.noteDetails, targetDeckName, parseTagsFromInput());
+            try {
+              await callAnkiConnect("sync");
+              setStatus(
+                `Copied card to "${targetDeckName}" and sync requested using Anki's saved session.`,
+                "success"
+              );
+            } catch (syncError) {
+              console.warn("Sync failed", syncError);
+              setStatus(
+                `Copied card to "${targetDeckName}" but sync failed via saved session: ${syncError.message}`,
+                "error"
+              );
+            }
+          } catch (error) {
+            console.error(error);
+            setStatus(error.message || "Failed to copy card", "error");
+          } finally {
+            copyButton.disabled = false;
+          }
+        });
+        actions.appendChild(copyButton);
+
         const updateButton = document.createElement("button");
         updateButton.textContent = "Update card";
         updateButton.addEventListener("click", async () => {
@@ -3135,50 +3350,72 @@
           applyMaskedContent(definitionText, definition.definition, lookupTerm);
           listItem.appendChild(definitionText);
 
-          if (definition.example) {
-            const exampleText = document.createElement("p");
-            exampleText.className = "example-text";
-            applyMaskedContent(exampleText, definition.example, lookupTerm);
+          const exampleCandidates = Array.isArray(definition.examples)
+            ? definition.examples.slice()
+            : [];
+          if ((!exampleCandidates || !exampleCandidates.length) && definition.example) {
+            exampleCandidates.push(definition.example);
+          }
 
-            if (entry.isExistingNote) {
-              listItem.appendChild(exampleText);
-            } else {
-            const exampleButton = document.createElement("button");
-            exampleButton.textContent = "Use this example";
-            exampleButton.addEventListener("click", () => {
-              exampleField.value = maskTargetInText(
-                definition.example,
-                lookupTerm
-              );
-              adjustTextareaHeight(exampleField);
-              setStatus("Example added to the card", "success");
+          const examples = Array.from(
+            new Set(
+              exampleCandidates
+                .map((candidate) => (candidate || "").toString().trim())
+                .filter(Boolean)
+            )
+          );
+
+          if (examples.length) {
+            const exampleList = document.createElement("ul");
+            exampleList.className = "example-list";
+
+            examples.forEach((exampleText, index) => {
+              const exampleItem = document.createElement("li");
+              exampleItem.className = "example-item";
+
+              const exampleTextElement = document.createElement("p");
+              exampleTextElement.className = "example-text";
+              applyMaskedContent(exampleTextElement, exampleText, lookupTerm);
+              exampleItem.appendChild(exampleTextElement);
+
+              if (!entry.isExistingNote) {
+                const exampleButton = document.createElement("button");
+                exampleButton.type = "button";
+                exampleButton.textContent =
+                  examples.length > 1 ? `Use example ${index + 1}` : "Use this example";
+                exampleButton.addEventListener("click", () => {
+                  exampleField.value = maskTargetInText(exampleText, lookupTerm);
+                  adjustTextareaHeight(exampleField);
+                  setStatus("Example added to the card", "success");
+                });
+                exampleItem.appendChild(exampleButton);
+              }
+
+              exampleList.appendChild(exampleItem);
             });
 
+            listItem.appendChild(exampleList);
+          }
+
+          if (!entry.isExistingNote) {
+            const actions = document.createElement("div");
+            actions.className = "definition-actions";
+
             const definitionButton = document.createElement("button");
+            definitionButton.type = "button";
             definitionButton.textContent = "Use this definition";
             definitionButton.addEventListener("click", () => {
-              backField.value = maskTargetInText(
-                definition.definition,
-                lookupTerm
-              );
+              backField.value = maskTargetInText(definition.definition, lookupTerm);
               adjustTextareaHeight(backField);
-              if (!frontField.value.trim()) {
-                frontField.value = entry.word || lookupTerm;
-                adjustTextareaHeight(frontField);
-              }
+              frontField.value = entry.word || lookupTerm;
+              adjustTextareaHeight(frontField);
               refreshMaskedWordField();
               setStatus("Definition added to the card", "success");
             });
+            actions.appendChild(definitionButton);
 
-            const exampleWrapper = document.createElement("div");
-            exampleWrapper.style.display = "grid";
-            exampleWrapper.style.gap = "0.4rem";
-            exampleWrapper.appendChild(exampleText);
-            exampleWrapper.appendChild(exampleButton);
-            exampleWrapper.appendChild(definitionButton);
-            listItem.appendChild(exampleWrapper);
+            listItem.appendChild(actions);
           }
-        }
 
           definitionList.appendChild(listItem);
         });
@@ -3412,129 +3649,48 @@
             renderSpellingSuggestionsList([], parsedTerm);
           });
 
-        const defaultDeckSummary = {
-          deckName: deckSelect.value || "",
-          entries: [],
-          totalCount: 0,
-          shownCount: 0,
-          truncated: false,
-          error: "",
-        };
+        let deckLookupSummaries = []
 
-        let deckLookupSummary = defaultDeckSummary;
-
-        let deckLookupPromise = (shouldSearchDecks
-          ? findDeckEntries(parsedTerm.term, deckSelect.value)
-          : Promise.resolve(defaultDeckSummary))
-          .then((summary) => {
-            deckLookupSummary = summary;
-            if (Array.isArray(summary.entries) && summary.entries.length) {
-              addEntries(summary.entries, summary.deckName || "Existing cards", {
-                prepend: true,
-                trackProvider: false,
-              });
-            }
+        const deckLookupPromise = (shouldSearchDecks
+          ? findDeckEntriesForSelection(parsedTerm.term)
+          : Promise.resolve([]))
+          .then((summaries) => {
+            deckLookupSummaries = Array.isArray(summaries) ? summaries : [];
+            deckLookupSummaries.forEach((summary) => {
+              if (Array.isArray(summary.entries) && summary.entries.length) {
+                addEntries(summary.entries, summary.deckName || "Existing cards", {
+                  prepend: true,
+                  trackProvider: false,
+                });
+              }
+            });
             renderDictionaryResults(collectedEntries, parsedTerm);
-            return summary;
+            return deckLookupSummaries;
           })
           .catch((error) => {
             console.warn("Deck lookup failed", error);
-            deckLookupSummary = {
-              deckName: deckSelect.value || "",
+            const failureSummary = {
+              deckName: determineDeckSelectionLabel(),
               entries: [],
               totalCount: 0,
               shownCount: 0,
               truncated: false,
               error: error?.message || "Deck lookup failed.",
             };
+            deckLookupSummaries = [failureSummary];
             renderDictionaryResults(collectedEntries, parsedTerm);
-            return deckLookupSummary;
+            return deckLookupSummaries;
           });
-
-        const providerTasks = providerIds.map((providerId) => {
-          const lookupPromise = (async () => {
-            const provider = dictionaryProviders[providerId];
-            if (!provider) {
-              return { providerId, entries: [], embeddedCount: 0 };
-            }
-
-            const credentials = getProviderCredentials(provider.id);
-            if (provider.requiresCredentials) {
-              const requiredKeys = Array.isArray(provider.credentialKeys)
-                ? provider.credentialKeys
-                : [];
-              const missingKeys = requiredKeys.filter((key) => !credentials[key]);
-              if (missingKeys.length) {
-                missingCredentials.push(provider.label || providerId);
-                return { providerId, entries: [], embeddedCount: 0 };
-              }
-            }
-
-            const providerEntries = [];
-            let providerEmbeddedCount = 0;
-
-            try {
-              const directEntries = await provider.fetchEntries(parsedTerm.term, parsedTerm, {
-                credentials,
-              });
-              if (Array.isArray(directEntries)) {
-                providerEntries.push(...directEntries);
-              }
-            } catch (error) {
-              console.warn(`Lookup failed for ${provider.label || providerId}`, error);
-              if (error?.message) {
-                providerErrors.push(`${provider.label || providerId}: ${error.message}`);
-              }
-            }
-
-            if (provider.supportsEmbeddedSearch && parsedTerm.tokens.length > 1) {
-              try {
-                const embeddedEntries = await searchWithinEntries(parsedTerm, providerId, credentials);
-                providerEmbeddedCount += embeddedEntries.length;
-                if (Array.isArray(embeddedEntries)) {
-                  providerEntries.push(...embeddedEntries);
-                }
-              } catch (embeddedError) {
-                console.warn(`Embedded search failed for ${provider.label || providerId}`, embeddedError);
-              }
-            }
-
-            const filteredEntries = providerEntries
-              .map((entry) =>
-                entry && !entry.isSynonymList
-                  ? filterEntryByPartOfSpeech(entry, parsedTerm.partOfSpeech)
-                  : entry
-              )
-              .filter(Boolean);
-
-            return { providerId, entries: filteredEntries, embeddedCount: providerEmbeddedCount };
-          })();
-
-          return lookupPromise
-            .then((result) => {
-              embeddedMatchCount += result.embeddedCount;
-              const providerLabel = dictionaryProviders[result.providerId]?.label || result.providerId;
-              addEntries(result.entries, providerLabel);
-              renderDictionaryResults(collectedEntries, parsedTerm);
-              return result;
-            })
-            .catch((error) => {
-              console.error(`Lookup failed for ${providerId}`, error);
-              providerErrors.push(
-                `${dictionaryProviders[providerId]?.label || providerId}: ${error?.message || "Unknown error"}`
-              );
-              renderDictionaryResults(collectedEntries, parsedTerm);
-              return { providerId, entries: [], embeddedCount: 0 };
-            });
-        });
 
         const finalizeSearch = () => {
           if (!collectedEntries.length) {
             renderDictionaryResults([], parsedTerm);
             let emptyMessage = "No entries available.";
-            if (deckLookupSummary.deckName && deckLookupSummary.error) {
-              emptyMessage += ` Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`;
-            }
+            deckLookupSummaries.forEach((summary) => {
+              if (summary.deckName && summary.error) {
+                emptyMessage += ` Deck lookup failed for "${summary.deckName}": ${summary.error}`;
+              }
+            });
             if (missingCredentials.length) {
               emptyMessage += ` Skipped ${missingCredentials.join(", ")} (missing credentials).`;
             }
@@ -3567,23 +3723,31 @@
             statusParts.push(`Dictionary results loaded from ${providerSummary}${embeddedNote}.`);
           }
 
-          if (shouldSearchDecks && deckLookupSummary.deckName) {
-            if (deckLookupSummary.error) {
-              statusParts.push(
-                `Deck lookup failed for "${deckLookupSummary.deckName}": ${deckLookupSummary.error}`
-              );
-            } else if (deckLookupSummary.totalCount > 0) {
-              let deckMessage = `Found ${deckLookupSummary.totalCount} existing card${
-                deckLookupSummary.totalCount === 1 ? "" : "s"
-              } in "${deckLookupSummary.deckName}"`;
-              if (deckLookupSummary.truncated && deckLookupSummary.shownCount) {
-                deckMessage += ` (showing first ${deckLookupSummary.shownCount})`;
+          if (shouldSearchDecks && deckLookupSummaries.length) {
+            deckLookupSummaries.forEach((summary) => {
+              if (!summary.deckName) {
+                return;
               }
-              deckMessage += ".";
-              statusParts.push(deckMessage);
-            } else {
-              statusParts.push(`No existing cards matched in "${deckLookupSummary.deckName}".`);
-            }
+              if (summary.error) {
+                statusParts.push(
+                  `Deck lookup failed for "${summary.deckName}": ${summary.error}`
+                );
+                return;
+              }
+
+              if (summary.totalCount > 0) {
+                let deckMessage = `Found ${summary.totalCount} existing card${
+                  summary.totalCount === 1 ? "" : "s"
+                } in "${summary.deckName}"`;
+                if (summary.truncated && summary.shownCount) {
+                  deckMessage += ` (showing first ${summary.shownCount})`;
+                }
+                deckMessage += ".";
+                statusParts.push(deckMessage);
+              } else {
+                statusParts.push(`No existing cards matched in "${summary.deckName}".`);
+              }
+            });
           }
 
           if (missingCredentials.length) {
@@ -3594,7 +3758,8 @@
             statusParts.push(`Dictionary errors: ${providerErrors.join("; ")}.`);
           }
 
-          const statusType = deckLookupSummary.error || providerErrors.length ? "error" : "success";
+          const hasDeckErrors = deckLookupSummaries.some((summary) => summary.error);
+          const statusType = hasDeckErrors || providerErrors.length ? "error" : "success";
           setStatus(statusParts.join(" "), statusType);
         };
 
@@ -3624,10 +3789,7 @@
 
       refreshMaskedWordField();
 
-      const tags = tagsInput.value
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean);
+      const tags = parseTagsFromInput();
 
       let metadata = modelFieldCache.get(modelName);
       try {
