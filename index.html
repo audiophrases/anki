@@ -1686,10 +1686,9 @@
     }
 
     const DICTIONARY_PROXY_HOSTS = new Set([
-      "www.merriam-webster.com",
-      "www.ldoceonline.com",
-      "www.oxfordlearnersdictionaries.com",
-      "dictionary.cambridge.org",
+      "www.wordwebonline.com",
+      "en.wiktionary.org",
+      "www.wordnik.com",
     ]);
 
     function rewriteDictionaryRequestUrl(url) {
@@ -1790,14 +1789,25 @@
       return normalizeUrbanEntries(data, queryTerm);
     }
 
-    function normalizeLongmanEntries(documentNode, term) {
+    function normalizeWordWebEntries(documentNode, term) {
       if (!documentNode) {
         return [];
       }
 
+      const entryRoot =
+        documentNode.querySelector("#results") ||
+        documentNode.querySelector("#leftcolumn") ||
+        documentNode.body;
+
+      if (!entryRoot) {
+        return [];
+      }
+
       const definitionNodes = Array.from(
-        documentNode.querySelectorAll("span.DEF, span.Def, span.definition")
-      );
+        entryRoot.querySelectorAll(
+          "[class*='wwdef'], [class*='ww-def'], [class*='definition'], [data-type='definition'], .wwsense, .sense, .definition"
+        )
+      ).filter((node) => extractNodeText(node).length);
 
       if (!definitionNodes.length) {
         return [];
@@ -1807,32 +1817,44 @@
       let fallbackIndex = 1;
 
       definitionNodes.forEach((node) => {
-        const definition = extractNodeText(node);
+        const definition =
+          queryTextContent(node, [
+            ".wwdef", "[class*='definition']", ".definition", ".def", ".meaning", "p",
+          ]) || extractNodeText(node);
+
         if (!definition) {
           return;
         }
 
-        const senseNode =
-          node.closest(".Sense") ||
-          node.closest(".sense") ||
-          node.closest("[data-type='sense']") ||
-          null;
+        const example = queryTextContent(node, [
+          ".example",
+          ".usage",
+          ".wwexample",
+          ".ex",
+          ".eg",
+          "blockquote",
+        ]);
 
-        const exampleNode = senseNode
-          ? senseNode.querySelector("span.EXAMPLE, span.EXA, span.example, .exa")
-          : null;
-        const example = extractNodeText(exampleNode);
+        let partOfSpeech = queryTextContent(node, [
+          ".wwpos",
+          ".pos",
+          ".partofspeech",
+          "[data-pos]",
+        ]);
 
-        let partOfSpeech = "";
-        if (senseNode) {
-          partOfSpeech = queryTextContent(senseNode, [".POS", ".pos", ".posgram"]);
-        }
         if (!partOfSpeech) {
-          partOfSpeech = queryTextContent(
-            node.closest(".dictentry") || documentNode,
-            [".POS", ".pos", ".posgram"]
+          const container = node.closest(
+            ".wwentry, .entry, [data-pos], [class*='pos']"
           );
+          partOfSpeech = queryTextContent(container, [
+            ".wwpos",
+            ".pos",
+            ".partofspeech",
+            "[data-pos]",
+            "h3",
+          ]);
         }
+
         if (!partOfSpeech) {
           partOfSpeech = `Sense ${fallbackIndex}`;
           fallbackIndex += 1;
@@ -1851,6 +1873,7 @@
           if (!normalized.length) {
             return null;
           }
+
           return {
             partOfSpeech,
             definitions: normalized,
@@ -1863,21 +1886,34 @@
       }
 
       const headword =
-        queryTextContent(documentNode, [".HWD", ".Head .HWD", "h1", ".headword"]) || term;
+        queryTextContent(documentNode, [
+          "#wordheader .word",
+          "#leftcolumn h1",
+          ".wwword",
+          ".headword",
+          "title",
+        ]) || term;
+
       const phonetic =
-        queryTextContent(documentNode, [".PronCodes .PRON", ".PronCodes", ".pronunciation"]) || "";
+        queryTextContent(documentNode, [
+          "#wordheader .pronounce",
+          ".pronounce",
+          ".pronunciation",
+          ".ipa",
+          ".phonetic",
+        ]) || "";
 
       return [
         {
           word: headword || term,
           phonetic,
-          source: "Longman",
+          source: "WordWeb Online",
           meanings,
         },
       ];
     }
 
-    async function fetchLongmanEntries(term, parsedTerm) {
+    async function fetchWordWebEntries(term, parsedTerm) {
       const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
         ? parsedTerm.variants
         : [term];
@@ -1891,15 +1927,15 @@
           tried.add(slugCandidate);
 
           const url = rewriteDictionaryRequestUrl(
-            `https://www.ldoceonline.com/dictionary/${encodeURIComponent(slugCandidate)}`
+            `https://www.wordwebonline.com/en/${encodeURIComponent(slugCandidate)}`
           );
-          const documentNode = await fetchHtmlDocument(url, { label: "Longman lookup failed" });
+          const documentNode = await fetchHtmlDocument(url, { label: "WordWeb lookup failed" });
 
           if (!documentNode) {
             continue;
           }
 
-          const entries = normalizeLongmanEntries(documentNode, variant);
+          const entries = normalizeWordWebEntries(documentNode, variant);
           if (entries.length) {
             return entries;
           }
@@ -1909,87 +1945,94 @@
       return [];
     }
 
-    function normalizeMerriamEntries(documentNode, term) {
+    function normalizeWiktionaryEntries(documentNode, term) {
       if (!documentNode) {
         return [];
       }
 
-      const definitionNodes = Array.from(documentNode.querySelectorAll("span.dtText"));
-      if (!definitionNodes.length) {
+      const englishHeading = documentNode.querySelector("#English");
+      if (!englishHeading) {
         return [];
       }
 
+      const meanings = [];
       const meaningMap = new Map();
+      let node = englishHeading.parentElement?.nextElementSibling || null;
+      let currentPartOfSpeech = "";
       let fallbackIndex = 1;
 
-      definitionNodes.forEach((node) => {
-        let definition = extractNodeText(node);
-        if (!definition) {
-          return;
-        }
-
-        definition = definition.replace(/^[:·\s]+/, "").trim();
-        if (!definition) {
-          return;
-        }
-
-        const container = node.closest("li") || node.closest("div.sense") || node.parentElement;
-        const exampleNode = container
-          ? container.querySelector("span.ex-sent, span.t.has-snippet, span.ex-sent-first")
-          : null;
-        const example = extractNodeText(exampleNode);
-
-        let partOfSpeech = "";
-        if (container) {
-          partOfSpeech = queryTextContent(container, ["span.fl"]);
-        }
-        if (!partOfSpeech) {
-          partOfSpeech = queryTextContent(node.closest(".vg") || documentNode, ["span.fl"]);
-        }
-        if (!partOfSpeech) {
-          partOfSpeech = `Sense ${fallbackIndex}`;
+      while (node && !(node.tagName && node.tagName.toLowerCase() === "h2")) {
+        if (node.tagName && /^h[3-4]$/i.test(node.tagName)) {
+          const headline = node.querySelector(".mw-headline") || node;
+          currentPartOfSpeech = extractNodeText(headline) || `Sense ${fallbackIndex}`;
           fallbackIndex += 1;
+        } else if (node.tagName && node.tagName.toLowerCase() === "ol") {
+          const listItems = Array.from(node.children).filter(
+            (child) => child.tagName && child.tagName.toLowerCase() === "li"
+          );
+
+          listItems.forEach((item) => {
+            const clone = item.cloneNode(true);
+            clone.querySelectorAll("ul, ol, dl, table, div, sup, span.ref").forEach((child) =>
+              child.remove()
+            );
+
+            const definition = extractNodeText(clone);
+            if (!definition) {
+              return;
+            }
+
+            const exampleNode = item.querySelector(
+              "ul li, dl dd, .quotation, .quotes, .example, blockquote"
+            );
+            const example = extractNodeText(exampleNode);
+
+            const partOfSpeech = currentPartOfSpeech || `Sense ${fallbackIndex}`;
+            if (!currentPartOfSpeech) {
+              fallbackIndex += 1;
+            }
+
+            if (!meaningMap.has(partOfSpeech)) {
+              meaningMap.set(partOfSpeech, []);
+            }
+
+            meaningMap.get(partOfSpeech).push({ definition, example });
+          });
         }
 
-        if (!meaningMap.has(partOfSpeech)) {
-          meaningMap.set(partOfSpeech, []);
-        }
+        node = node.nextElementSibling;
+      }
 
-        meaningMap.get(partOfSpeech).push({ definition, example });
+      meaningMap.forEach((definitions, partOfSpeech) => {
+        const normalized = normalizeDefinitions(definitions);
+        if (normalized.length) {
+          meanings.push({ partOfSpeech, definitions: normalized });
+        }
       });
-
-      const meanings = Array.from(meaningMap.entries())
-        .map(([partOfSpeech, definitionList]) => {
-          const normalized = normalizeDefinitions(definitionList);
-          if (!normalized.length) {
-            return null;
-          }
-          return {
-            partOfSpeech,
-            definitions: normalized,
-          };
-        })
-        .filter(Boolean);
 
       if (!meanings.length) {
         return [];
       }
 
       const headword =
-        queryTextContent(documentNode, ["h1.hword", ".entry-header .hword", "h1"]) || term;
-      const phonetic = queryTextContent(documentNode, ["span.prs span.pr", "span.pr"]);
+        queryTextContent(documentNode, ["h1#firstHeading", ".firstHeading", "title"]) || term;
+
+      const phonetic = queryTextContent(
+        englishHeading.parentElement,
+        [".IPA", ".pronunciation .IPA", "span.IPA"]
+      );
 
       return [
         {
           word: headword || term,
           phonetic: phonetic || "",
-          source: "Merriam-Webster",
+          source: "Wiktionary",
           meanings,
         },
       ];
     }
 
-    async function fetchMerriamEntries(term, parsedTerm) {
+    async function fetchWiktionaryEntries(term, parsedTerm) {
       const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
         ? parsedTerm.variants
         : [term];
@@ -2003,17 +2046,15 @@
           tried.add(slugCandidate);
 
           const url = rewriteDictionaryRequestUrl(
-            `https://www.merriam-webster.com/dictionary/${encodeURIComponent(slugCandidate)}`
+            `https://en.wiktionary.org/wiki/${encodeURIComponent(slugCandidate)}`
           );
-          const documentNode = await fetchHtmlDocument(url, {
-            label: "Merriam-Webster lookup failed",
-          });
+          const documentNode = await fetchHtmlDocument(url, { label: "Wiktionary lookup failed" });
 
           if (!documentNode) {
             continue;
           }
 
-          const entries = normalizeMerriamEntries(documentNode, variant);
+          const entries = normalizeWiktionaryEntries(documentNode, variant);
           if (entries.length) {
             return entries;
           }
@@ -2023,127 +2064,135 @@
       return [];
     }
 
-    function normalizeCambridgeEntries(documentNode, term) {
+    function normalizeWordnikEntries(documentNode, term) {
       if (!documentNode) {
         return [];
       }
 
-      const entryNodes = Array.from(
+      const definitionSections = Array.from(
         documentNode.querySelectorAll(
-          ".entry-body__el, .entry-body .entry-body__el, .dpr-entry-body .entry-body__el"
+          "section#definitions, section.word-module.definitions, section.word-module[data-title*='Definition']"
         )
       );
 
-      if (!entryNodes.length) {
+      let definitionItems = definitionSections.flatMap((section) =>
+        Array.from(section.querySelectorAll("li"))
+      );
+
+      if (!definitionItems.length) {
+        definitionItems = Array.from(
+          documentNode.querySelectorAll(
+            "li.definition, li[class*='definition'], div.definition-item, div.definition"
+          )
+        );
+      }
+
+      definitionItems = definitionItems.filter((item) => extractNodeText(item).length);
+
+      if (!definitionItems.length) {
         return [];
       }
 
-      const entries = [];
+      const meaningMap = new Map();
+      let fallbackIndex = 1;
 
-      entryNodes.forEach((entryNode) => {
-        const headword =
-          queryTextContent(entryNode, [
-            ".pos-header .headword",
-            ".pos-header .hw",
-            ".di-title .headword",
-            ".di-title",
-          ]) || term;
+      definitionItems.forEach((item) => {
+        const definition =
+          queryTextContent(item, [
+            ".definition",
+            ".def-text",
+            ".text",
+            "p",
+            "span",
+          ]) || extractNodeText(item);
 
-        const phonetic =
-          queryTextContent(entryNode, [
-            ".pos-header .dpron",
-            ".pos-header .ipa",
-            ".pos-header .pron",
-            ".pron .ipa",
-          ]) || "";
-
-        const definitionBlocks = Array.from(
-          entryNode.querySelectorAll(
-            ".ddef_block, .def-block, .sense-body .def-block, .sense-block .def-block"
-          )
-        );
-
-        if (!definitionBlocks.length) {
+        if (!definition) {
           return;
         }
 
-        const meaningMap = new Map();
-        let fallbackIndex = 1;
+        const example = queryTextContent(item, [
+          ".example",
+          ".quotation",
+          ".quote",
+          ".citation",
+          "blockquote",
+        ]);
 
-        definitionBlocks.forEach((block) => {
-          const headerText = extractNodeText(
-            block.querySelector(
-              ".ddef_h, .def-head, .def-title, .def, .def-block__header, .def-head__text"
-            )
-          );
-          const bodyText = extractNodeText(
-            block.querySelector(".ddef_b, .def-body, .def-block__body, .def-body__content")
-          );
+        let partOfSpeech = queryTextContent(item, [
+          ".partOfSpeech",
+          ".pos",
+          ".functional-label",
+          "[data-pos]",
+        ]);
 
-          const definition = [headerText, bodyText].filter(Boolean).join(" ").trim();
-          if (!definition) {
-            return;
-          }
-
-          const exampleNode =
-            block.querySelector(
-              ".examp, .eg, .deg, .example, .ddef_ex, .def-body__example, .example-sentences .eg"
-            ) || null;
-          const example = extractNodeText(exampleNode);
-
-          let partOfSpeech = queryTextContent(block, [
-            ".posgram .pos",
+        if (!partOfSpeech) {
+          const container = item.closest("[data-pos], .definition-container, .word-module");
+          partOfSpeech = queryTextContent(container, [
+            ".partOfSpeech",
             ".pos",
-            ".dpos",
+            ".functional-label",
+            "header h3",
+            "h3",
           ]);
-          if (!partOfSpeech) {
-            partOfSpeech = queryTextContent(entryNode, [
-              ".pos-header .dpos",
-              ".pos-header .pos",
-              ".posgram .pos",
-            ]);
-          }
-          if (!partOfSpeech) {
-            partOfSpeech = `Sense ${fallbackIndex}`;
-            fallbackIndex += 1;
-          }
-
-          if (!meaningMap.has(partOfSpeech)) {
-            meaningMap.set(partOfSpeech, []);
-          }
-
-          meaningMap.get(partOfSpeech).push({ definition, example });
-        });
-
-        const meanings = Array.from(meaningMap.entries())
-          .map(([partOfSpeech, definitionList]) => {
-            const normalized = normalizeDefinitions(definitionList);
-            if (!normalized.length) {
-              return null;
-            }
-            return {
-              partOfSpeech,
-              definitions: normalized,
-            };
-          })
-          .filter(Boolean);
-
-        if (!meanings.length) {
-          return;
         }
 
-        entries.push({
-          word: headword || term,
-          phonetic,
-          source: "Cambridge",
-          meanings,
-        });
+        if (!partOfSpeech) {
+          partOfSpeech = `Sense ${fallbackIndex}`;
+          fallbackIndex += 1;
+        }
+
+        if (!meaningMap.has(partOfSpeech)) {
+          meaningMap.set(partOfSpeech, []);
+        }
+
+        meaningMap.get(partOfSpeech).push({ definition, example });
       });
 
-      return entries;
+      const meanings = Array.from(meaningMap.entries())
+        .map(([partOfSpeech, definitionList]) => {
+          const normalized = normalizeDefinitions(definitionList);
+          if (!normalized.length) {
+            return null;
+          }
+
+          return {
+            partOfSpeech,
+            definitions: normalized,
+          };
+        })
+        .filter(Boolean);
+
+      if (!meanings.length) {
+        return [];
+      }
+
+      const headword =
+        queryTextContent(documentNode, [
+          "header h1.word",
+          "header h1",
+          ".word-and-pronunciation h1",
+          "title",
+        ]) || term;
+
+      const phonetic =
+        queryTextContent(documentNode, [
+          ".pronunciations .pronunciation",
+          "header .pronunciation",
+          ".word-pronunciations .pronunciation",
+          ".ipa",
+        ]) || "";
+
+      return [
+        {
+          word: headword || term,
+          phonetic,
+          source: "Wordnik",
+          meanings,
+        },
+      ];
     }
 
-    async function fetchCambridgeEntries(term, parsedTerm) {
+    async function fetchWordnikEntries(term, parsedTerm) {
       const variants = Array.isArray(parsedTerm?.variants) && parsedTerm.variants.length
         ? parsedTerm.variants
         : [term];
@@ -2157,15 +2206,15 @@
           tried.add(slugCandidate);
 
           const url = rewriteDictionaryRequestUrl(
-            `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(slugCandidate)}`
+            `https://www.wordnik.com/words/${encodeURIComponent(slugCandidate)}`
           );
-          const documentNode = await fetchHtmlDocument(url, { label: "Cambridge lookup failed" });
+          const documentNode = await fetchHtmlDocument(url, { label: "Wordnik lookup failed" });
 
           if (!documentNode) {
             continue;
           }
 
-          const entries = normalizeCambridgeEntries(documentNode, variant);
+          const entries = normalizeWordnikEntries(documentNode, variant);
           if (entries.length) {
             return entries;
           }
@@ -2231,27 +2280,27 @@
     }
 
     const dictionaryProviders = {
-      longman: {
-        id: "longman",
-        label: "Longman",
-        fetchEntries: fetchLongmanEntries,
+      wordweb: {
+        id: "wordweb",
+        label: "WordWeb Online",
+        fetchEntries: fetchWordWebEntries,
         supportsEmbeddedSearch: true,
         defaultEnabled: true,
         type: "definition",
       },
-      merriam: {
-        id: "merriam",
-        label: "Merriam-Webster",
-        fetchEntries: fetchMerriamEntries,
+      wiktionary: {
+        id: "wiktionary",
+        label: "Wiktionary",
+        fetchEntries: fetchWiktionaryEntries,
+        supportsEmbeddedSearch: true,
+        defaultEnabled: true,
+        type: "definition",
+      },
+      wordnik: {
+        id: "wordnik",
+        label: "Wordnik",
+        fetchEntries: fetchWordnikEntries,
         supportsEmbeddedSearch: false,
-        defaultEnabled: true,
-        type: "definition",
-      },
-      cambridge: {
-        id: "cambridge",
-        label: "Cambridge",
-        fetchEntries: fetchCambridgeEntries,
-        supportsEmbeddedSearch: true,
         defaultEnabled: true,
         type: "definition",
       },
