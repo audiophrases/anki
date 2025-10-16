@@ -823,20 +823,6 @@
         </section>
       </div>
 
-      <section class="panel" id="preview-panel">
-        <h2>Preview</h2>
-        <p><strong>Deck:</strong> <span id="preview-deck">—</span></p>
-        <p><strong>Note Type:</strong> <span id="preview-model">Basic</span></p>
-        <p><strong>Tags:</strong> <span id="preview-tags">—</span></p>
-        <article style="margin-top: 1rem; padding: 1rem; border-radius: 12px; background: rgba(63, 100, 199, 0.08);">
-          <h3 style="margin-top: 0;">Front</h3>
-          <p id="preview-front" style="white-space: pre-wrap;"></p>
-          <h3>Back</h3>
-          <p id="preview-back" style="white-space: pre-wrap;"></p>
-          <h3>Example</h3>
-          <p id="preview-example" style="white-space: pre-wrap;"></p>
-        </article>
-      </section>
     </main>
   </div>
 
@@ -870,13 +856,6 @@
     const appContainer = document.querySelector(".app");
     const sidebar = document.getElementById("sidebar");
     const sidebarToggle = document.getElementById("sidebar-toggle");
-
-    const previewDeck = document.getElementById("preview-deck");
-    const previewModel = document.getElementById("preview-model");
-    const previewTags = document.getElementById("preview-tags");
-    const previewFront = document.getElementById("preview-front");
-    const previewBack = document.getElementById("preview-back");
-    const previewExample = document.getElementById("preview-example");
 
     const DEFAULT_FIELD_LABELS = {
       front: frontFieldLabel ? frontFieldLabel.textContent : "Word",
@@ -1491,20 +1470,8 @@
       passwordInput.value = savedCredentials.password;
     }
 
-    function updatePreview() {
-      const deckName = deckSelect.value ? deckSelect.value : "—";
-      previewDeck.textContent = deckName;
-      previewModel.textContent = modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
-      const tags = tagsInput.value.trim();
-      previewTags.textContent = tags || "—";
-      previewFront.textContent = frontField.value;
-      previewBack.textContent = backField.value;
-      previewExample.textContent = exampleField.value;
-    }
-
     [frontField, backField, exampleField, tagsInput].forEach((element) => {
       element.addEventListener("input", () => {
-        updatePreview();
         if (element === frontField) {
           refreshMaskedWordField();
         }
@@ -1513,7 +1480,6 @@
         }
       });
       element.addEventListener("change", () => {
-        updatePreview();
         if (element === frontField) {
           refreshMaskedWordField();
         }
@@ -1529,7 +1495,6 @@
 
     function handleModelNameInput(event) {
       userModifiedNoteType = true;
-      updatePreview();
       if (event?.type === "change") {
         refreshModelFieldsForCurrentModel();
       }
@@ -1557,7 +1522,6 @@
     deckSelect.addEventListener("change", () => {
       persistDeckSelection();
       userModifiedNoteType = false;
-      updatePreview();
       const deckName = deckSelect.value;
       if (deckName) {
         loadNoteTypesForDeck(deckName);
@@ -2780,7 +2744,6 @@
         });
       }
 
-      updatePreview();
       refreshMaskedWordField();
       fieldEditors.forEach((editor) => adjustTextareaHeight(editor));
     }
@@ -3082,7 +3045,6 @@
         tagsInput.value = "";
       }
 
-      updatePreview();
     }
 
     async function updateExistingNoteFromEditor(noteDetails) {
@@ -3318,7 +3280,6 @@
 
           if (preferredModelName && preferredModelName !== currentModelName) {
             modelNameInput.value = preferredModelName;
-            updatePreview();
           }
 
           userModifiedNoteType = false;
@@ -3370,14 +3331,12 @@
             deckSelect.value = savedDeck;
             persistDeckSelection();
             await loadNoteTypesForDeck(savedDeck);
-            updatePreview();
             return;
           }
         }
         updateModelSuggestions([]);
         await refreshModelFieldsForCurrentModel();
         setStatus("Decks loaded", "success");
-        updatePreview();
       } catch (error) {
         console.error(error);
         setStatus(error.message || "Failed to load decks", "error");
@@ -3546,7 +3505,6 @@
                 lookupTerm
               );
               adjustTextareaHeight(exampleField);
-              updatePreview();
               setStatus("Example added to the card", "success");
             });
 
@@ -3563,7 +3521,6 @@
                 adjustTextareaHeight(frontField);
               }
               refreshMaskedWordField();
-              updatePreview();
               setStatus("Definition added to the card", "success");
             });
 
@@ -4153,7 +4110,6 @@
     });
     addCardBtn.addEventListener("click", addCard);
 
-    updatePreview();
   </script>
 </body>
 </html>
