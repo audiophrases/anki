@@ -5,6 +5,7 @@ const ALLOWED_HOSTS = new Set([
   "www.merriam-webster.com",
   "www.ldoceonline.com",
   "www.oxfordlearnersdictionaries.com",
+  "dictionary.cambridge.org",
 ]);
 
 const HOP_BY_HOP_HEADERS = new Set([
