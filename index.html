@@ -66,7 +66,7 @@
       z-index: 30;
     }
 
-    .app.is-sidebar-collapsed {
+    .app.is-sidebar-collapsed { 
       grid-template-columns: 0 minmax(0, 1.1rem) 1fr;
     }
 
@@ -207,6 +207,91 @@
       border-radius: 16px;
       padding: 1.5rem;
       box-shadow: 0 10px 30px rgba(43, 58, 92, 0.1);
+    }
+
+    .dictionary-workspace {
+      display: grid;
+      gap: 1.5rem;
+      min-height: 0;
+      flex: 1 1 auto;
+    }
+
+    .dictionary-workspace > .panel {
+      min-height: 0;
+    }
+
+    #dictionary-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      min-height: 0;
+    }
+
+    #dictionary-panel .dictionary-results {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .note-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .note-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-areas:
+        "word masked"
+        "definition definition"
+        "example example";
+    }
+
+    .note-field {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .note-field--word {
+      grid-area: word;
+    }
+
+    .note-field--masked {
+      grid-area: masked;
+    }
+
+    .note-field--definition {
+      grid-area: definition;
+    }
+
+    .note-field--example {
+      grid-area: example;
+    }
+
+    .note-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    @media (orientation: landscape) {
+      .dictionary-workspace {
+        grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+        align-items: stretch;
+        grid-auto-rows: minmax(0, 1fr);
+      }
+
+      #dictionary-panel {
+        overflow: hidden;
+        height: 100%;
+      }
+
+      #dictionary-panel .dictionary-results {
+        padding-right: 0.25rem;
+      }
     }
 
     #note-panel {
@@ -685,56 +770,58 @@
         </p>
       </section>
 
-      <section class="panel" id="dictionary-panel">
-        <h2>Dictionary Lookup</h2>
-        <div class="dictionary-controls">
-          <input type="text" id="lookup-term" placeholder="Search term" />
-          <div class="dictionary-scope" aria-live="polite">All dictionaries</div>
-          <button id="search-dictionary">Search</button>
-        </div>
-        <div class="dictionary-settings">
-          <div>
-            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Search scope</p>
-            <div class="scope-toggle" role="group" aria-label="Search scope">
-              <button type="button" class="is-active" data-scope="online-decks">Online + decks</button>
-              <button type="button" data-scope="online-only">Online only</button>
-              <button type="button" data-scope="decks-only">Decks only</button>
+      <div class="dictionary-workspace">
+        <section class="panel note-panel" id="note-panel">
+          <div class="note-grid">
+            <div class="note-field note-field--word">
+              <label for="front-field">Word</label>
+              <textarea id="front-field" placeholder="Word"></textarea>
+            </div>
+            <div class="note-field note-field--masked" id="masked-field-container" hidden></div>
+            <div class="note-field note-field--definition">
+              <label for="back-field">Definition</label>
+              <textarea id="back-field" placeholder="Definition"></textarea>
+            </div>
+            <div class="note-field note-field--example" id="example-field-wrapper">
+              <label for="example-field">Example Sentence (optional)</label>
+              <textarea
+                id="example-field"
+                placeholder="Add your own or pick one from the dictionary results"
+              ></textarea>
             </div>
           </div>
-          <div>
-            <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Dictionaries</p>
-            <div class="dictionary-provider-grid" id="dictionary-provider-grid"></div>
+          <div class="additional-fields" id="additional-fields" hidden></div>
+          <div class="note-actions">
+            <button id="add-card">Add Card to Deck</button>
+            <span class="status" id="status"></span>
           </div>
-        </div>
-        <div class="suggestions" id="spelling-suggestions" hidden></div>
-        <div class="dictionary-results" id="dictionary-results"></div>
-      </section>
+        </section>
 
-      <section class="panel" id="note-panel">
-        <h2>Customize Card</h2>
-        <div class="split" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-          <div>
-            <label for="front-field">Front</label>
-            <textarea id="front-field" placeholder="Front of the card"></textarea>
+        <section class="panel" id="dictionary-panel">
+          <h2>Dictionary Lookup</h2>
+          <div class="dictionary-controls">
+            <input type="text" id="lookup-term" placeholder="Search term" />
+            <div class="dictionary-scope" aria-live="polite">All dictionaries</div>
+            <button id="search-dictionary">Search</button>
           </div>
-          <div>
-            <label for="back-field">Back</label>
-            <textarea id="back-field" placeholder="Back of the card"></textarea>
+          <div class="dictionary-settings">
+            <div>
+              <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Search scope</p>
+              <div class="scope-toggle" role="group" aria-label="Search scope">
+                <button type="button" class="is-active" data-scope="online-decks">Online + decks</button>
+                <button type="button" data-scope="online-only">Online only</button>
+                <button type="button" data-scope="decks-only">Decks only</button>
+              </div>
+            </div>
+            <div>
+              <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #2f4075;">Dictionaries</p>
+              <div class="dictionary-provider-grid" id="dictionary-provider-grid"></div>
+            </div>
           </div>
-        </div>
-        <div class="split" style="margin-top: 1.5rem;" id="example-field-wrapper">
-          <label for="example-field">Example Sentence (optional)</label>
-          <textarea
-            id="example-field"
-            placeholder="Add your own or pick one from the dictionary results"
-          ></textarea>
-        </div>
-        <div class="additional-fields" id="additional-fields" hidden></div>
-        <div style="margin-top: 1.5rem; display: flex; gap: 1rem; align-items: center;">
-          <button id="add-card">Add Card to Deck</button>
-          <span class="status" id="status"></span>
-        </div>
-      </section>
+          <div class="suggestions" id="spelling-suggestions" hidden></div>
+          <div class="dictionary-results" id="dictionary-results"></div>
+        </section>
+      </div>
 
       <section class="panel" id="preview-panel">
         <h2>Preview</h2>
@@ -769,6 +856,7 @@
     const backFieldLabel = document.querySelector("label[for='back-field']");
     const exampleFieldLabel = document.querySelector("label[for='example-field']");
     const exampleFieldWrapper = document.getElementById("example-field-wrapper");
+    const maskedFieldContainer = document.getElementById("masked-field-container");
     const additionalFieldsContainer = document.getElementById("additional-fields");
     const addCardBtn = document.getElementById("add-card");
     const statusEl = document.getElementById("status");
@@ -791,8 +879,8 @@
     const previewExample = document.getElementById("preview-example");
 
     const DEFAULT_FIELD_LABELS = {
-      front: frontFieldLabel ? frontFieldLabel.textContent : "Front",
-      back: backFieldLabel ? backFieldLabel.textContent : "Back",
+      front: frontFieldLabel ? frontFieldLabel.textContent : "Word",
+      back: backFieldLabel ? backFieldLabel.textContent : "Definition",
       example: exampleFieldLabel ? exampleFieldLabel.textContent : "Example Sentence (optional)",
     };
 
@@ -2503,6 +2591,11 @@
         additionalFieldsContainer.hidden = true;
       }
 
+      if (maskedFieldContainer) {
+        maskedFieldContainer.innerHTML = "";
+        maskedFieldContainer.hidden = true;
+      }
+
       const assignedFields = new Set();
 
       const assignPrimaryEditor = (element, labelElement, defaultLabel, fieldName) => {
@@ -2551,6 +2644,31 @@
       if (!exampleFieldName && exampleField) {
         exampleField.value = "";
         adjustTextareaHeight(exampleField);
+      }
+
+      if (maskedFieldName && maskedFieldContainer) {
+        const previousValue = preservedValues.has(maskedFieldName)
+          ? preservedValues.get(maskedFieldName)
+          : "";
+        const label = document.createElement("label");
+        const editorId = createFieldEditorId(maskedFieldName);
+        label.htmlFor = editorId;
+        label.textContent = maskedFieldName;
+
+        const textarea = document.createElement("textarea");
+        textarea.id = editorId;
+        textarea.dataset.fieldName = maskedFieldName;
+        textarea.readOnly = true;
+        textarea.value = previousValue;
+        textarea.addEventListener("input", () => adjustTextareaHeight(textarea));
+
+        maskedFieldContainer.appendChild(label);
+        maskedFieldContainer.appendChild(textarea);
+        maskedFieldContainer.hidden = false;
+        adjustTextareaHeight(textarea);
+
+        fieldEditors.set(maskedFieldName, textarea);
+        assignedFields.add(maskedFieldName);
       }
 
       if (additionalFieldsContainer) {
