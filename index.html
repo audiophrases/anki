@@ -560,6 +560,23 @@
       justify-self: start;
     }
 
+    .existing-note-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .existing-note-actions button {
+      flex-shrink: 0;
+    }
+
+    .existing-note-actions span {
+      font-size: 0.85rem;
+      color: rgba(30, 42, 68, 0.72);
+    }
+
     .definition-text {
       font-size: 1rem;
       color: #1e2a44;
@@ -736,6 +753,7 @@
         </div>
         <div class="additional-fields" id="additional-fields" hidden></div>
         <div class="note-actions">
+          <button id="update-card" disabled>Update Loaded Card</button>
           <button id="add-card">Add Card to Deck</button>
           <span class="status" id="status"></span>
         </div>
@@ -866,6 +884,7 @@
     const exampleFieldWrapper = document.getElementById("example-field-wrapper");
     const maskedFieldContainer = document.getElementById("masked-field-container");
     const additionalFieldsContainer = document.getElementById("additional-fields");
+    const updateCardBtn = document.getElementById("update-card");
     const addCardBtn = document.getElementById("add-card");
     const statusEl = document.getElementById("status");
     const usernameInput = document.getElementById("anki-username");
@@ -927,6 +946,7 @@
     const fieldEditors = new Map();
     const additionalFieldEditors = new Map();
     let availableDeckNames = [];
+    let activeLoadedNote = null;
     const PART_OF_SPEECH_ALIASES = {
       noun: ["noun", "n", "n.", "countable noun", "uncountable noun", "plural noun"],
       verb: ["verb", "v", "v.", "transitive verb", "intransitive verb", "phrasal verb"],
@@ -1282,6 +1302,26 @@
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean);
+    }
+
+    function updateLoadedNoteButtonState() {
+      if (!updateCardBtn) {
+        return;
+      }
+
+      const hasLoadedNote = Boolean(activeLoadedNote && activeLoadedNote.id);
+      updateCardBtn.disabled = !hasLoadedNote;
+
+      if (hasLoadedNote) {
+        updateCardBtn.dataset.noteId = String(activeLoadedNote.id);
+      } else {
+        delete updateCardBtn.dataset.noteId;
+      }
+    }
+
+    function setActiveLoadedNote(noteDetails) {
+      activeLoadedNote = noteDetails || null;
+      updateLoadedNoteButtonState();
     }
 
     function hideSetupNotice() {
@@ -2219,6 +2259,36 @@
       };
     }
 
+    function refreshActiveLoadedNoteSnapshot(fields, { modelName, tags } = {}) {
+      if (!activeLoadedNote) {
+        return;
+      }
+
+      if (fields) {
+        const updatedFields = { ...fields };
+        activeLoadedNote.fields = updatedFields;
+        if (Array.isArray(activeLoadedNote.orderedFields)) {
+          activeLoadedNote.orderedFields.forEach((entry) => {
+            if (!entry || !entry.name) {
+              return;
+            }
+            entry.value = updatedFields[entry.name] || "";
+          });
+        }
+      }
+
+      if (modelName) {
+        activeLoadedNote.modelName = modelName;
+      }
+
+      if (Array.isArray(tags)) {
+        activeLoadedNote.tags = tags.slice();
+      }
+
+      activeLoadedNote.roleMap = activeModelFieldMetadata.roleMap;
+      updateNoteDetailsDisplay(activeLoadedNote);
+    }
+
     function getActiveWordFieldName(metadata = activeModelFieldMetadata) {
       if (!metadata) {
         return null;
@@ -2567,6 +2637,27 @@
       return noteDetails;
     }
 
+    function cloneNoteDetails(noteDetails) {
+      if (!noteDetails) {
+        return null;
+      }
+
+      const cloned = {
+        id: noteDetails.id,
+        deckName: noteDetails.deckName,
+        modelName: noteDetails.modelName,
+        tags: Array.isArray(noteDetails.tags) ? noteDetails.tags.slice() : [],
+        orderedFields: Array.isArray(noteDetails.orderedFields)
+          ? noteDetails.orderedFields.map((entry) => ({ ...entry }))
+          : [],
+        fields: { ...(noteDetails.fields || {}) },
+        roleMap: { ...(noteDetails.roleMap || {}) },
+        display: noteDetails.display ? { ...noteDetails.display } : {},
+      };
+
+      return cloned;
+    }
+
     function mapDeckNotesToEntries(notesInfo, deckName, lookupContext = {}) {
       if (!Array.isArray(notesInfo)) {
         return [];
@@ -2879,6 +2970,8 @@
         }
       }
 
+      return noteDetails;
+
     }
 
     function createMaskFromMatch(match) {
@@ -3182,6 +3275,62 @@
         phonetic.style.margin = "0";
         phonetic.innerHTML = `<strong>Phonetic:</strong> ${entry.phonetic}`;
         content.appendChild(phonetic);
+      }
+
+      if (entry.isExistingNote && entry.noteDetails) {
+        const existingNoteActions = document.createElement("div");
+        existingNoteActions.className = "existing-note-actions";
+
+        const loadButton = document.createElement("button");
+        loadButton.type = "button";
+        loadButton.textContent = "Load this note";
+        loadButton.addEventListener("click", () => {
+          const clonedDetails = cloneNoteDetails(entry.noteDetails);
+          if (!clonedDetails) {
+            return;
+          }
+
+          if (!clonedDetails.deckName && entry.deckName) {
+            clonedDetails.deckName = entry.deckName;
+          }
+
+          const appliedDetails = applyNoteToEditor(clonedDetails) || clonedDetails;
+          setActiveLoadedNote(appliedDetails);
+
+          const descriptionParts = [];
+          const displayWord =
+            (appliedDetails.display && appliedDetails.display.frontText) ||
+            entry.word ||
+            lookupTerm ||
+            "";
+          if (displayWord) {
+            descriptionParts.push(`"${displayWord}"`);
+          }
+
+          const deckLabel = appliedDetails.deckName || entry.deckName || "";
+          if (deckLabel) {
+            descriptionParts.push(`from "${deckLabel}"`);
+          }
+
+          const summaryText = descriptionParts.length
+            ? `Loaded existing card ${descriptionParts.join(" ")}`
+            : "Loaded existing card";
+
+          setStatus(
+            `${summaryText}. Edit the fields and choose "Update Loaded Card" to save changes.`,
+            "success"
+          );
+        });
+
+        existingNoteActions.appendChild(loadButton);
+
+        if (entry.noteDetails.id) {
+          const noteIdLabel = document.createElement("span");
+          noteIdLabel.textContent = `Note #${entry.noteDetails.id}`;
+          existingNoteActions.appendChild(noteIdLabel);
+        }
+
+        content.appendChild(existingNoteActions);
       }
 
       let sanitizedNoteWord = "";
@@ -3618,17 +3767,13 @@
         searchButton.disabled = false;
       }
     }
-    async function addCard() {
+    async function collectNoteFieldValues({ requireDeck = true } = {}) {
       const deckName = deckSelect.value;
-      const modelName = modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
-
-      if (!deckName) {
-        setStatus("Please choose a deck", "error");
-        return;
+      if (requireDeck && !deckName) {
+        throw new Error("Please choose a deck");
       }
 
-      setStatus("Adding card to deck…");
-      addCardBtn.disabled = true;
+      const modelName = modelNameInput.value.trim() || DEFAULT_MODEL_NAME;
 
       refreshMaskedWordField();
 
@@ -3636,27 +3781,24 @@
 
       let metadata = modelFieldCache.get(modelName);
       try {
-        if (!metadata || !metadata.orderedFieldNames?.length) {
+        if (!metadata || !Array.isArray(metadata.orderedFieldNames) || !metadata.orderedFieldNames.length) {
           metadata = await ensureModelFieldMetadata(modelName);
         }
       } catch (metadataError) {
         console.error(metadataError);
-        setStatus(
-          metadataError.message || `Failed to load fields for "${modelName}"`,
-          "error"
+        throw new Error(
+          metadataError?.message || `Failed to load fields for "${modelName}"`
         );
-        addCardBtn.disabled = false;
-        return;
       }
 
-      const orderedFieldNames = Array.isArray(metadata?.orderedFieldNames)
+      const orderedFieldNames = Array.isArray(metadata?.orderedFieldNames) && metadata.orderedFieldNames.length
         ? metadata.orderedFieldNames
+        : Array.isArray(activeModelFieldMetadata?.orderedFieldNames)
+        ? activeModelFieldMetadata.orderedFieldNames
         : [];
 
       if (!orderedFieldNames.length) {
-        setStatus(`The note type "${modelName}" has no fields.`, "error");
-        addCardBtn.disabled = false;
-        return;
+        throw new Error(`The note type "${modelName}" has no fields.`);
       }
 
       const fields = {};
@@ -3686,15 +3828,11 @@
         : "";
 
       if (!wordValue) {
-        setStatus("Primary fields cannot be empty for this note type.", "error");
-        addCardBtn.disabled = false;
-        return;
+        throw new Error("Primary fields cannot be empty for this note type.");
       }
 
       if (definitionFieldName && !definitionValue) {
-        setStatus("Primary fields cannot be empty for this note type.", "error");
-        addCardBtn.disabled = false;
-        return;
+        throw new Error("Primary fields cannot be empty for this note type.");
       }
 
       if (wordFieldName) {
@@ -3716,6 +3854,65 @@
         }
         fields[maskedFieldName] = maskedValue;
       }
+
+      return {
+        deckName,
+        modelName,
+        fields,
+        tags,
+        wordFieldName,
+        wordValue,
+        definitionFieldName,
+        definitionValue,
+      };
+    }
+
+    async function commitNoteUpdate(
+      noteId,
+      fields,
+      { successMessage, syncFailurePrefix } = {}
+    ) {
+      if (!noteId) {
+        throw new Error("A note identifier is required to update.");
+      }
+
+      await callAnkiConnect("updateNoteFields", {
+        note: { id: noteId, fields },
+      });
+
+      try {
+        await callAnkiConnect("sync");
+        if (successMessage) {
+          setStatus(successMessage, "success");
+        }
+      } catch (syncError) {
+        console.warn("Sync failed", syncError);
+        const failureMessage = syncFailurePrefix
+          ? `${syncFailurePrefix}: ${syncError.message}`
+          : `Sync failed via saved session: ${syncError.message}`;
+        setStatus(failureMessage, "error");
+      }
+    }
+
+    async function addCard() {
+      setStatus("Adding card to deck…");
+      addCardBtn.disabled = true;
+
+      if (updateCardBtn) {
+        updateCardBtn.disabled = true;
+      }
+
+      let payload;
+      try {
+        payload = await collectNoteFieldValues({ requireDeck: true });
+      } catch (error) {
+        setStatus(error?.message || "Failed to prepare the card", "error");
+        addCardBtn.disabled = false;
+        updateLoadedNoteButtonState();
+        return;
+      }
+
+      const { deckName, modelName, fields, tags, wordFieldName, wordValue } = payload;
 
       try {
         await callAnkiConnect("addNote", {
@@ -3747,60 +3944,92 @@
           typeof window !== "undefined" &&
           errorMessage.toLowerCase().includes("cannot create note because it is a duplicate")
         ) {
-          const shouldUpdate = window.confirm(
-            "An existing card has the same primary fields. Update the existing card instead?"
-          );
-          if (shouldUpdate) {
-            try {
-              const duplicateNoteId = await findDuplicateNoteId({
-                modelName,
-                wordFieldName,
-                wordValue,
+          try {
+            const duplicateNoteId = await findDuplicateNoteId({
+              modelName,
+              wordFieldName,
+              wordValue,
+            });
+
+            if (
+              duplicateNoteId &&
+              activeLoadedNote &&
+              Number(activeLoadedNote.id) === Number(duplicateNoteId)
+            ) {
+              await commitNoteUpdate(duplicateNoteId, fields, {
+                successMessage:
+                  "Existing card updated because a duplicate was detected. Sync requested using Anki's saved session.",
+                syncFailurePrefix:
+                  "Existing card updated but sync failed via saved session",
               });
-              if (!duplicateNoteId) {
-                setStatus(
-                  "Duplicate detected but the existing card could not be located for update.",
-                  "error"
-                );
-              } else {
-                await callAnkiConnect("updateNoteFields", {
-                  note: { id: duplicateNoteId, fields },
-                });
-                try {
-                  await callAnkiConnect("sync");
-                  setStatus(
-                    "Existing card updated and sync requested using Anki's saved session.",
-                    "success"
-                  );
-                } catch (syncError) {
-                  console.warn("Sync failed", syncError);
-                  setStatus(
-                    `Existing card updated but sync failed via saved session: ${syncError.message}`,
-                    "error"
-                  );
-                }
-              }
-            } catch (updateError) {
-              console.error(updateError);
-              setStatus(updateError.message || "Failed to update existing card", "error");
+              refreshActiveLoadedNoteSnapshot(fields, {
+                modelName,
+                tags,
+              });
+            } else {
+              setStatus(
+                "Card was not added because an existing note already contains these primary fields.",
+                "error"
+              );
             }
-          } else {
-            setStatus(
-              "Card was not added because an existing note already contains these primary fields.",
-              "error"
-            );
+          } catch (updateError) {
+            console.error(updateError);
+            setStatus(updateError.message || "Failed to update existing card", "error");
           }
         } else {
           setStatus(errorMessage, "error");
         }
       } finally {
         addCardBtn.disabled = false;
+        updateLoadedNoteButtonState();
+      }
+    }
+
+    async function updateLoadedCard() {
+      if (!activeLoadedNote || !activeLoadedNote.id) {
+        setStatus("Load an existing card before updating.", "error");
+        return;
+      }
+
+      setStatus("Updating loaded card…");
+      if (updateCardBtn) {
+        updateCardBtn.disabled = true;
+      }
+
+      let payload;
+      try {
+        payload = await collectNoteFieldValues({ requireDeck: false });
+      } catch (error) {
+        setStatus(error?.message || "Failed to prepare the update", "error");
+        updateLoadedNoteButtonState();
+        return;
+      }
+
+      const { modelName, fields, tags } = payload;
+
+      try {
+        await commitNoteUpdate(activeLoadedNote.id, fields, {
+          successMessage:
+            "Loaded card updated and sync requested using Anki's saved session.",
+          syncFailurePrefix: "Loaded card updated but sync failed via saved session",
+        });
+        refreshActiveLoadedNoteSnapshot(fields, { modelName, tags });
+      } catch (error) {
+        console.error(error);
+        setStatus(error?.message || "Failed to update loaded card", "error");
+      } finally {
+        updateLoadedNoteButtonState();
       }
     }
 
     const initialDeckSelection = getSessionItem(SESSION_KEYS.deck);
     if (initialDeckSelection) {
       loadDecks();
+    }
+
+    updateLoadedNoteButtonState();
+    if (updateCardBtn) {
+      updateCardBtn.addEventListener("click", updateLoadedCard);
     }
 
     loadDecksBtn.addEventListener("click", loadDecks);
