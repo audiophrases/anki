@@ -1448,7 +1448,21 @@
 
       const data = await response.json();
       if (data.error) {
-        throw new Error(data.error);
+        const originalErrorMessage = data.error;
+        if (
+          action === "sync" &&
+          typeof originalErrorMessage === "string" &&
+          /com\.google\.gson\.(JsonSyntaxException|stream\.MalformedJsonException)/.test(
+            originalErrorMessage,
+          )
+        ) {
+          throw new Error(
+            "Sync failed because AnkiConnect's saved AnkiWeb session is no longer valid. " +
+              "Please open Anki or AnkiDroid, perform a manual sync, and then try again.",
+          );
+        }
+
+        throw new Error(originalErrorMessage);
       }
 
       markAnkiConnectSuccess();
