@@ -607,14 +607,29 @@
     .status {
       font-size: 0.95rem;
       min-height: 1.5rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.65rem;
+      border: 1px solid transparent;
+      background: rgba(30, 42, 68, 0.04);
+      color: #1e2a44;
     }
 
     .status.success {
-      color: #1a8f5b;
+      background: rgba(64, 174, 125, 0.14);
+      color: #1f6f4d;
+      border-color: rgba(64, 174, 125, 0.45);
     }
 
     .status.error {
-      color: #cc2b3d;
+      background: rgba(235, 87, 87, 0.1);
+      color: #a02929;
+      border-color: rgba(235, 87, 87, 0.32);
+    }
+
+    .status.warning {
+      background: rgba(247, 186, 82, 0.18);
+      color: #8a5a00;
+      border-color: rgba(247, 186, 82, 0.45);
     }
 
     .split {
@@ -1291,6 +1306,30 @@
     function setStatus(message, type = "") {
       statusEl.textContent = message;
       statusEl.className = "status" + (type ? " " + type : "");
+    }
+
+    const SAVED_SESSION_SYNC_INSTRUCTIONS =
+      "Automatic sync requires a fresh AnkiWeb login. Please open Anki or AnkiDroid, perform a manual sync, and then try again.";
+
+    function isSavedSessionSyncError(error) {
+      const message = typeof error === "string" ? error : error?.message;
+      return (
+        typeof message === "string" &&
+        message.toLowerCase().includes(
+          "saved ankiconnect's saved ankiweb session is no longer valid"
+        )
+      );
+    }
+
+    function formatSavedSessionSyncWarning(baseMessage = "") {
+      const withoutSyncSuffix = (baseMessage || "")
+        .replace(/\s*and sync requested using Anki's saved session\.?$/i, "")
+        .replace(/\s*but sync failed via saved session:?$/i, "")
+        .trim();
+      const prefix = withoutSyncSuffix
+        ? `${withoutSyncSuffix.replace(/\.+$/, "")}. `
+        : "";
+      return `${prefix}${SAVED_SESSION_SYNC_INSTRUCTIONS}`;
     }
 
     function parseTagsFromInput() {
@@ -3901,10 +3940,19 @@
         }
       } catch (syncError) {
         console.warn("Sync failed", syncError);
-        const failureMessage = syncFailurePrefix
-          ? `${syncFailurePrefix}: ${syncError.message}`
-          : `Sync failed via saved session: ${syncError.message}`;
-        setStatus(failureMessage, "error");
+        if (isSavedSessionSyncError(syncError)) {
+          const baseMessage =
+            successMessage ||
+            (syncFailurePrefix
+              ? syncFailurePrefix.replace(/\s*but sync failed via saved session:?$/i, "")
+              : "");
+          setStatus(formatSavedSessionSyncWarning(baseMessage), "warning");
+        } else {
+          const failureMessage = syncFailurePrefix
+            ? `${syncFailurePrefix}: ${syncError.message}`
+            : `Sync failed via saved session: ${syncError.message}`;
+          setStatus(failureMessage, "error");
+        }
       }
     }
 
@@ -3938,18 +3986,21 @@
           },
         });
 
+        const syncSuccessMessage =
+          "Card added and sync requested using Anki's saved session.";
         try {
           await callAnkiConnect("sync");
-          setStatus(
-            "Card added and sync requested using Anki's saved session.",
-            "success"
-          );
+          setStatus(syncSuccessMessage, "success");
         } catch (syncError) {
           console.warn("Sync failed", syncError);
-          setStatus(
-            `Card added but sync failed via saved session: ${syncError.message}`,
-            "error"
-          );
+          if (isSavedSessionSyncError(syncError)) {
+            setStatus(formatSavedSessionSyncWarning(syncSuccessMessage), "warning");
+          } else {
+            setStatus(
+              `Card added but sync failed via saved session: ${syncError.message}`,
+              "error"
+            );
+          }
         }
       } catch (error) {
         console.error(error);
@@ -4047,6 +4098,51 @@
     }
 
     loadDecksBtn.addEventListener("click", loadDecks);
+    async function attemptClipboardPrefillForLookup() {
+      if (
+        !lookupTermInput ||
+        typeof navigator === "undefined" ||
+        !navigator.clipboard ||
+        lookupTermInput.value.trim()
+      ) {
+        return;
+      }
+
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          try {
+            const permissionStatus = await navigator.permissions.query({
+              name: "clipboard-read",
+            });
+            if (permissionStatus.state === "denied") {
+              return;
+            }
+          } catch (permissionError) {
+            console.debug("Clipboard permission query skipped", permissionError);
+          }
+        }
+
+        const clipboardText = await navigator.clipboard.readText();
+        if (!clipboardText || lookupTermInput.value.trim()) {
+          return;
+        }
+
+        const trimmed = clipboardText.trim();
+        if (!trimmed) {
+          return;
+        }
+
+        lookupTermInput.value = trimmed;
+        lookupTermInput.dispatchEvent(new Event("input", { bubbles: true }));
+      } catch (clipboardError) {
+        console.debug("Clipboard contents unavailable", clipboardError);
+      }
+    }
+
+    lookupTermInput.addEventListener("focus", () => {
+      void attemptClipboardPrefillForLookup();
+    });
+
     searchButton.addEventListener("click", searchDictionary);
     lookupTermInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
