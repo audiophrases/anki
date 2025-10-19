@@ -1313,11 +1313,13 @@
 
     function isSavedSessionSyncError(error) {
       const message = typeof error === "string" ? error : error?.message;
-      return (
-        typeof message === "string" &&
-        message.toLowerCase().includes(
-          "saved ankiconnect's saved ankiweb session is no longer valid"
-        )
+      if (typeof message !== "string") {
+        return false;
+      }
+
+      const lowercased = message.toLowerCase();
+      return lowercased.includes(
+        "ankiconnect's saved ankiweb session is no longer valid"
       );
     }
 
@@ -4108,35 +4110,33 @@
         return;
       }
 
+      let clipboardText;
       try {
-        if (navigator.permissions && navigator.permissions.query) {
-          try {
-            const permissionStatus = await navigator.permissions.query({
-              name: "clipboard-read",
-            });
-            if (permissionStatus.state === "denied") {
-              return;
-            }
-          } catch (permissionError) {
-            console.debug("Clipboard permission query skipped", permissionError);
-          }
-        }
-
-        const clipboardText = await navigator.clipboard.readText();
-        if (!clipboardText || lookupTermInput.value.trim()) {
-          return;
-        }
-
-        const trimmed = clipboardText.trim();
-        if (!trimmed) {
-          return;
-        }
-
-        lookupTermInput.value = trimmed;
-        lookupTermInput.dispatchEvent(new Event("input", { bubbles: true }));
+        clipboardText = await navigator.clipboard.readText();
       } catch (clipboardError) {
+        if (
+          clipboardError?.name === "NotAllowedError" ||
+          clipboardError?.name === "SecurityError"
+        ) {
+          console.debug("Clipboard access denied", clipboardError);
+          return;
+        }
+
         console.debug("Clipboard contents unavailable", clipboardError);
+        return;
       }
+
+      if (!clipboardText || lookupTermInput.value.trim()) {
+        return;
+      }
+
+      const trimmed = clipboardText.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      lookupTermInput.value = trimmed;
+      lookupTermInput.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
     lookupTermInput.addEventListener("focus", () => {
