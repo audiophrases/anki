@@ -1180,6 +1180,41 @@
       return cleaned;
     }
 
+    function collectCaseInsensitiveVariants(value) {
+      const variants = new Set();
+      const original = typeof value === "string" ? value : "";
+      if (!original) {
+        return [];
+      }
+
+      variants.add(original);
+
+      const lower = original.toLowerCase();
+      if (lower) {
+        variants.add(lower);
+      }
+
+      const upper = original.toUpperCase();
+      if (upper) {
+        variants.add(upper);
+      }
+
+      const titleCase = original
+        .split(/(\s|-|_)/)
+        .map((segment) => {
+          if (!segment || /\s|-|_/.test(segment)) {
+            return segment;
+          }
+          return segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase();
+        })
+        .join("");
+      if (titleCase) {
+        variants.add(titleCase);
+      }
+
+      return Array.from(variants);
+    }
+
     function generateSearchVariants(term) {
       const variants = new Set();
       const trimmed = (term || "").trim();
@@ -1187,14 +1222,47 @@
         return [];
       }
 
-      variants.add(trimmed);
-      variants.add(trimmed.replace(/\s+/g, "-"));
-      variants.add(trimmed.replace(/\s+/g, ""));
-      variants.add(trimmed.replace(/-/g, " "));
-      variants.add(trimmed.replace(/-/g, ""));
-      variants.add(trimmed.replace(/[’']/g, ""));
+      const addVariant = (value) => {
+        collectCaseInsensitiveVariants(value).forEach((variant) => {
+          if (variant) {
+            variants.add(variant);
+          }
+        });
+      };
+
+      addVariant(trimmed);
+      addVariant(trimmed.replace(/\s+/g, "-"));
+      addVariant(trimmed.replace(/\s+/g, ""));
+      addVariant(trimmed.replace(/-/g, " "));
+      addVariant(trimmed.replace(/-/g, ""));
+      addVariant(trimmed.replace(/[’']/g, ""));
 
       return Array.from(variants).filter(Boolean);
+    }
+
+    function buildLookupTermCandidates(term, parsedTerm) {
+      const candidates = new Set();
+
+      const addCandidate = (value) => {
+        collectCaseInsensitiveVariants(value).forEach((variant) => {
+          if (variant) {
+            candidates.add(variant);
+          }
+        });
+      };
+
+      addCandidate(term);
+
+      if (parsedTerm) {
+        addCandidate(parsedTerm.term);
+        addCandidate(parsedTerm.originalTerm);
+
+        if (Array.isArray(parsedTerm.variants)) {
+          parsedTerm.variants.forEach((variant) => addCandidate(variant));
+        }
+      }
+
+      return Array.from(candidates).filter(Boolean);
     }
 
     function parseLookupTerm(rawTerm) {
@@ -1919,11 +1987,11 @@
       return parseWiktionaryHtmlToEntries(html, term);
     }
 
-    async function fetchWiktionaryRestEntries(term, parsedTerm) {
-      const lookup = parsedTerm?.term || term;
+    async function fetchWiktionaryEntriesForLookup(lookup) {
       if (!lookup) {
         return [];
       }
+
       const endpoints = [
         `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(lookup)}?redirect=true&origin=*`,
         `https://en.wiktionary.org/api/rest_v1/page/definition/en/${encodeURIComponent(lookup)}?redirect=true&origin=*`,
@@ -1959,6 +2027,31 @@
       }
 
       return fetchWiktionaryHtmlEntries(lookup);
+    }
+
+    async function fetchWiktionaryRestEntries(term, parsedTerm) {
+      const lookupCandidates = buildLookupTermCandidates(term, parsedTerm);
+      if (!lookupCandidates.length) {
+        return [];
+      }
+
+      let hadSuccessfulLookup = false;
+      for (let index = 0; index < lookupCandidates.length; index += 1) {
+        const lookup = lookupCandidates[index];
+        try {
+          const entries = await fetchWiktionaryEntriesForLookup(lookup);
+          hadSuccessfulLookup = true;
+          if (entries.length) {
+            return entries;
+          }
+        } catch (error) {
+          if (index === lookupCandidates.length - 1 && !hadSuccessfulLookup) {
+            throw error;
+          }
+        }
+      }
+
+      return [];
     }
 
     const dictionaryProviders = {
