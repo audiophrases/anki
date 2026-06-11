@@ -50,6 +50,12 @@
             android:text="▶ Start eyes-free session (screen off)" />
 
         <Button
+            android:id="@+id/touchButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="▶ Start touch study (bed mode)" />
+
+        <Button
             android:id="@+id/studyButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

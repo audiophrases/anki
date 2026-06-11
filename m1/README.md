@@ -7,11 +7,22 @@ On top of M0's data path, the card is now **spoken aloud**:
   (voice, text): each text costs network once, replays are instant/offline.
 - **Fallback chain:** Edge fails (offline / endpoint change) → device TTS
   (Google), automatically, per segment — `CardSpeaker.kt`.
-- **Cloze blanks** (`gl••••es`) become a **bleep in-place** inside the sentence
-  (position is audible), then after a 2 s thinking pause a **spelled hint**:
-  "Hint: starts with G, L. Ends with E, S." — `AudioScript.kt`.
-  A line that is *only* a blanked token (dedicated hint field like `gl••••`)
-  is never read as a sentence; it only feeds the spelled hint.
+- **Cloze blanks** (`m••e`, `wh•••••d`) are read according to the study
+  direction — `AudioScript.kt`:
+  - **Recognition** (word given → recall the meaning; the word is visible on
+    this card side): blanks are **restored** and the sentence reads naturally
+    — "The contractor **cut corners**, and the repairs…". Two blank shapes
+    supported: whole word with hidden middle (`m••e` → make) and
+    stem+inflection (`wh•••••d` → wheedle+d → wheedled).
+  - **Production** (definition given → produce the word; the word is hidden):
+    blanks become natural inline hints, in position — "…but barely,
+    **4 letter word starting with M and ending with E**, then the word a,
+    then a **4 letter word starting with D and ending with T**, in the
+    backlog." Consecutive blanks are chained with "then the word …, then…".
+  - The direction is inferred per card side: if a visible word matches the
+    blank's shape, it's recognition; otherwise production. A line that is
+    *only* a blanked token (dedicated hint field like `wh•••••`) is never
+    read as a sentence.
 - Question auto-plays on load; **Replay question** button; answer side is
   spoken on reveal.
 

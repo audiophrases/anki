@@ -88,6 +88,13 @@ class MainActivity : AppCompatActivity() {
                 requestNotifPermission.launch(perm)
             }
         }
+        findViewById<Button>(R.id.touchButton).setOnClickListener {
+            lifecycleScope.launch { if (engine.active) engine.stop() }
+            startActivity(
+                Intent(this, TouchStudyActivity::class.java)
+                    .putExtra(TouchStudyActivity.EXTRA_DECK, selectedDeckName())
+            )
+        }
         studyButton.setOnClickListener { toggleStudy() }
         findViewById<Button>(R.id.replayButton).setOnClickListener { engine.replayQuestion() }
         findViewById<Button>(R.id.showButton).setOnClickListener {

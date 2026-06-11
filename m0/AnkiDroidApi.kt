@@ -86,19 +86,34 @@ object AnkiDroidApi {
      * Returns the next due card from [deckId] (or the last-selected deck if null),
      * or null if nothing is due.
      */
-    fun nextDueCard(context: Context, deckId: Long? = null): DueCard? {
-        val selection = if (deckId != null) "limit=?, deckID=?" else "limit=?"
-        val args = if (deckId != null) arrayOf("1", deckId.toString()) else arrayOf("1")
+    fun nextDueCard(context: Context, deckId: Long? = null): DueCard? =
+        nextDueCards(context, deckId, 1).firstOrNull()
 
-        context.contentResolver.query(SCHEDULE_URI, null, selection, args, null)?.use { c ->
-            if (!c.moveToFirst()) return null
-            val noteId = c.getLong(c.getColumnIndexOrThrow("note_id"))
-            val ord = c.getInt(c.getColumnIndexOrThrow("ord"))
-            val buttonCount = c.getInt(c.getColumnIndexOrThrow("button_count"))
-            val (q, a) = cardText(context, noteId, ord)
-            return DueCard(noteId, ord, buttonCount, q, a)
+    /**
+     * Returns up to [limit] upcoming due cards. Used by the undo machinery,
+     * which needs to look one card past a pending (uncommitted) rating.
+     */
+    fun nextDueCards(context: Context, deckId: Long?, limit: Int): List<DueCard> {
+        val selection = if (deckId != null) "limit=?, deckID=?" else "limit=?"
+        val args = if (deckId != null) {
+            arrayOf(limit.toString(), deckId.toString())
+        } else {
+            arrayOf(limit.toString())
         }
-        return null
+
+        val out = mutableListOf<DueCard>()
+        context.contentResolver.query(SCHEDULE_URI, null, selection, args, null)?.use { c ->
+            val noteIdx = c.getColumnIndexOrThrow("note_id")
+            val ordIdx = c.getColumnIndexOrThrow("ord")
+            val buttonIdx = c.getColumnIndexOrThrow("button_count")
+            while (c.moveToNext()) {
+                val noteId = c.getLong(noteIdx)
+                val ord = c.getInt(ordIdx)
+                val (q, a) = cardText(context, noteId, ord)
+                out += DueCard(noteId, ord, c.getInt(buttonIdx), q, a)
+            }
+        }
+        return out
     }
 
     /**
@@ -141,6 +156,22 @@ object AnkiDroidApi {
             put("time_taken", timeTakenMs)
         }
         context.contentResolver.update(SCHEDULE_URI, values, null, null)
+    }
+
+    /**
+     * Appends [tag] to a note's tags (no-op if already present). Used by the
+     * bookmark gesture so cards can be found later in Anki via tag search.
+     */
+    fun addTagToNote(context: Context, noteId: Long, tag: String): Boolean {
+        val uri = Uri.parse("content://$AUTHORITY/notes/$noteId")
+        var tags = ""
+        context.contentResolver.query(uri, arrayOf("tags"), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return false
+            tags = c.getString(0) ?: ""
+        } ?: return false
+        if (tag in tags.split(' ', ',')) return true
+        val values = ContentValues().apply { put("tags", "$tags $tag".trim()) }
+        return context.contentResolver.update(uri, values, null, null) > 0
     }
 
     private fun stripHtml(html: String): String {
