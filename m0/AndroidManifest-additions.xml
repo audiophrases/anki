@@ -1,0 +1,14 @@
+<!--
+  MERGE these into app/src/main/AndroidManifest.xml.
+  Place both elements INSIDE <manifest> but OUTSIDE (above) <application>.
+-->
+
+<!-- Lets the app use AnkiDroid's read/write API. AnkiDroid defines this permission,
+     so AnkiDroid must be installed for the grant to succeed. -->
+<uses-permission android:name="com.ichi2.anki.permission.READ_WRITE_DATABASE" />
+
+<!-- Android 11+ package visibility: without this, our ContentResolver cannot even
+     SEE AnkiDroid's content provider and queries silently return null. -->
+<queries>
+    <provider android:authorities="com.ichi2.anki.flashcards" />
+</queries>
