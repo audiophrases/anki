@@ -52,6 +52,8 @@
             android:text=""
             android:textSize="20sp" />
 
+        <!-- Eyes-free (screen off, vol-up/down) mode is hidden for now;
+             set visibility back to visible to re-enable. -->
         <Button
             android:id="@+id/sessionButton"
             android:layout_width="match_parent"
@@ -63,7 +65,8 @@
             android:text="🌙  Eyes-free (screen off)"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
-            android:textSize="18sp" />
+            android:textSize="18sp"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/touchButton"
