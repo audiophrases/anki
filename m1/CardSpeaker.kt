@@ -32,6 +32,10 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         const val TAG = "CardSpeaker"
     }
 
+    /** Hooks for coordinating other audio users (e.g. pausing the mic). */
+    var onPlaybackStart: (() -> Unit)? = null
+    var onPlaybackEnd: (() -> Unit)? = null
+
     private var job: Job? = null
     private var player: MediaPlayer? = null
 
@@ -46,6 +50,7 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         stop()
         Log.i(TAG, "speak: ${segments.size} segments")
         job = scope.launch {
+            onPlaybackStart?.invoke()
             try {
                 for ((i, seg) in segments.withIndex()) {
                     Log.i(TAG, "segment $i: $seg")
@@ -56,10 +61,14 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
                     }
                 }
                 Log.i(TAG, "script done")
+                onPlaybackEnd?.invoke()
             } catch (e: CancellationException) {
+                // Cancelled because a new script starts — its own
+                // onPlaybackStart keeps the mic paused; no end signal here.
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "playback failed", e)
+                onPlaybackEnd?.invoke()
             }
         }
     }

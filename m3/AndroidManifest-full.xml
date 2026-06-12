@@ -8,6 +8,10 @@
     <!-- Edge neural TTS synthesis (cached on disk; offline falls back to device TTS). -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Car mode: spoken commands between TTS playbacks. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <!-- M2 screen-off session: foreground media service + lock-screen controls. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -48,7 +52,7 @@
         <service
             android:name=".StudyService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="mediaPlayback|microphone" />
     </application>
 
 </manifest>

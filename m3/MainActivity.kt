@@ -52,7 +52,14 @@ class MainActivity : AppCompatActivity() {
 
     private val requestNotifPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { startSession() }
+    ) { startSession(voice = false) }
+
+    private val requestMicPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startSession(voice = true)
+        else status("Microphone permission denied — car mode needs it.")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,9 +90,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.sessionButton).setOnClickListener {
             val perm = android.Manifest.permission.POST_NOTIFICATIONS
             if (checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED) {
-                startSession()
+                startSession(voice = false)
             } else {
                 requestNotifPermission.launch(perm)
+            }
+        }
+        findViewById<Button>(R.id.carButton).setOnClickListener {
+            val mic = android.Manifest.permission.RECORD_AUDIO
+            if (checkSelfPermission(mic) == PackageManager.PERMISSION_GRANTED) {
+                startSession(voice = true)
+            } else {
+                requestMicPermission.launch(mic)
             }
         }
         findViewById<Button>(R.id.touchButton).setOnClickListener {
@@ -182,21 +197,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStudyButton() {
-        studyButton.text = if (engine.active) "■ Stop study" else "▶ Start study (here)"
+        studyButton.text = if (engine.active) "■  Stop study" else "▶  Start study (here)"
     }
 
     // ---- eyes-free session ----
 
-    private fun startSession() {
+    private fun startSession(voice: Boolean) {
         lifecycleScope.launch { if (engine.active) engine.stop() }
         startForegroundService(
             Intent(this, StudyService::class.java)
                 .setAction(StudyService.ACTION_START)
                 .putExtra(StudyService.EXTRA_DECK, selectedDeckName())
+                .putExtra(StudyService.EXTRA_VOICE, voice)
         )
         status(
-            "Session running — set your volume now, then lock the screen. " +
-                "Vol-up: reveal/Good · vol-down: replay/Again. Undo is in the notification."
+            if (voice) {
+                "Car mode running — speak between playbacks: show · repeat · " +
+                    "good · easy · hard · again · undo · bookmark · stop. " +
+                    "Volume keys change volume as usual."
+            } else {
+                "Session running — set your volume now, then lock the screen. " +
+                    "Vol-up: reveal/Good · vol-down: replay/Again. Undo is in the notification."
+            }
         )
     }
 

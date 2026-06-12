@@ -48,9 +48,11 @@ class TouchStudyActivity : AppCompatActivity() {
     private lateinit var root: FrameLayout
     private lateinit var stateView: TextView
 
-    /** Two-finger handling: suppress single-finger gestures around it. */
+    /** Multi-finger handling: suppress single-finger gestures around it. */
     private var twoFingerDownAt = 0L
+    private var fourFingerDownAt = 0L
     private var suppressSingleUntil = 0L
+    private var exiting = false
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,9 +104,10 @@ class TouchStudyActivity : AppCompatActivity() {
                     if (!engine.answerShown) {
                         engine.reveal()
                     } else {
+                        // Single tap = mild rating: bottom Good, top Hard.
                         val bottom = e.y > root.height / 2f
                         engine.rate(
-                            if (bottom) AnkiDroidApi.EASE_GOOD else AnkiDroidApi.EASE_AGAIN
+                            if (bottom) AnkiDroidApi.EASE_GOOD else AnkiDroidApi.EASE_HARD
                         )
                     }
                 }
@@ -118,9 +121,10 @@ class TouchStudyActivity : AppCompatActivity() {
                     if (!engine.answerShown) {
                         engine.reveal()
                     } else {
+                        // Double tap = extreme rating: bottom Easy, top Again.
                         val bottom = e.y > root.height / 2f
                         engine.rate(
-                            if (bottom) AnkiDroidApi.EASE_EASY else AnkiDroidApi.EASE_HARD
+                            if (bottom) AnkiDroidApi.EASE_EASY else AnkiDroidApi.EASE_AGAIN
                         )
                     }
                 }
@@ -147,18 +151,32 @@ class TouchStudyActivity : AppCompatActivity() {
 
         root.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
-                MotionEvent.ACTION_POINTER_DOWN -> if (ev.pointerCount == 2) {
-                    twoFingerDownAt = SystemClock.elapsedRealtime()
-                    suppressSingleUntil = twoFingerDownAt + 700
+                MotionEvent.ACTION_POINTER_DOWN -> when {
+                    ev.pointerCount >= 4 -> {
+                        // Four fingers trump everything: stop & exit gesture.
+                        fourFingerDownAt = SystemClock.elapsedRealtime()
+                        twoFingerDownAt = 0
+                        suppressSingleUntil = fourFingerDownAt + 900
+                    }
+                    ev.pointerCount == 2 -> {
+                        twoFingerDownAt = SystemClock.elapsedRealtime()
+                        suppressSingleUntil = twoFingerDownAt + 700
+                    }
                 }
                 MotionEvent.ACTION_UP -> {
-                    val downAt = twoFingerDownAt
-                    if (downAt > 0 && SystemClock.elapsedRealtime() - downAt < 450) {
-                        twoFingerDownAt = 0
-                        haptic(HapticFeedbackConstants.CONFIRM)
-                        lifecycleScope.launch { engine.undo() }
+                    val now = SystemClock.elapsedRealtime()
+                    when {
+                        fourFingerDownAt > 0 && now - fourFingerDownAt < 600 -> {
+                            haptic(HapticFeedbackConstants.LONG_PRESS)
+                            stopAndExit()
+                        }
+                        twoFingerDownAt > 0 && now - twoFingerDownAt < 450 -> {
+                            haptic(HapticFeedbackConstants.CONFIRM)
+                            lifecycleScope.launch { engine.undo() }
+                        }
                     }
                     twoFingerDownAt = 0
+                    fourFingerDownAt = 0
                 }
             }
             detector.onTouchEvent(ev)
@@ -176,6 +194,18 @@ class TouchStudyActivity : AppCompatActivity() {
         engine.stopBlocking() // commits a pending rating
         speaker.shutdown()
         super.onDestroy()
+    }
+
+    /** Four-finger tap: commit, say goodbye, return to the start screen. */
+    private fun stopAndExit() {
+        if (exiting) return
+        exiting = true
+        lifecycleScope.launch {
+            engine.stop() // commits any pending rating
+            speaker.speak(listOf(Segment.Speech("Study stopped.")))
+            delay(1500) // let the confirmation play before tearing down
+            finish()
+        }
     }
 
     private fun suppressed(): Boolean = SystemClock.elapsedRealtime() < suppressSingleUntil

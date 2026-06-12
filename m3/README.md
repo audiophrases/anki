@@ -12,14 +12,15 @@ pinned (enable Android screen pinning) and orientation locked to portrait.
 | Question | tap anywhere | Reveal answer |
 | Answer | tap **bottom** half | **Good** |
 | Answer | double-tap bottom | **Easy** |
-| Answer | tap **top** half | **Again** |
-| Answer | double-tap top | **Hard** |
+| Answer | tap **top** half | **Hard** |
+| Answer | double-tap top | **Again** |
 | Any | swipe down | Replay question |
 | Any | two-finger tap | **Undo** last rating |
+| Any | four-finger tap | **Stop & exit** to the start menu (commits pending) |
 | Any | long-press | **Bookmark**: tags the note `audio-bookmark` |
 
 Mnemonics: bottom = positive (near the thumb), top = negative;
-double-tap = stronger version of the same direction.
+**single tap = mild (Good/Hard), double tap = extreme (Easy/Again)**.
 
 The bookmark tag is written through the notes URI (`addTagToNote`) — find the
 cards later on desktop with `tag:audio-bookmark`.

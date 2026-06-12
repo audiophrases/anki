@@ -93,6 +93,12 @@ class StudyEngine(
         speaker.speak(questionScript)
     }
 
+    /** Context-aware replay (voice "repeat"): answer if revealed, else question. */
+    fun replay() {
+        if (!active || current == null) return
+        speaker.speak(if (answerShown) answerScript else questionScript)
+    }
+
     suspend fun rate(ease: Int) {
         if (!active) return
         val card = current ?: return
@@ -132,7 +138,7 @@ class StudyEngine(
         answerShown = false
         shownAt = SystemClock.elapsedRealtime()
         questionScript = AudioScript.forQuestion(p.card.question)
-        answerScript = AudioScript.forAnswer(p.card.answer)
+        answerScript = AudioScript.forAnswer(p.card.answer, p.card.question)
         speaker.speak(
             listOf(Segment.Speech("Undone."), Segment.Pause(300)) + questionScript
         )
@@ -172,7 +178,7 @@ class StudyEngine(
 
         shownAt = SystemClock.elapsedRealtime()
         questionScript = AudioScript.forQuestion(next.question)
-        answerScript = AudioScript.forAnswer(next.answer)
+        answerScript = AudioScript.forAnswer(next.answer, next.question)
         val script = buildList {
             if (confirm != null) {
                 add(Segment.Speech(confirm))
