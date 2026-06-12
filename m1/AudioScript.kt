@@ -49,34 +49,24 @@ object AudioScript {
     /**
      * The answer side often repeats question content (word, example,
      * definition, depending on the template). On reveal only the *new*
-     * information should be spoken, so lines whose rendered speech was
-     * already heard on the question side are dropped. The comparison happens
-     * after blank rendering: a question line spoken with the "blank"
-     * codeword differs from the answer's restored version, so the restored
-     * sentence IS spoken — that's the payoff, not a repeat.
+     * information should be spoken — for a production card just the word
+     * itself. The comparison is on the raw field lines, BEFORE blank
+     * rendering: the example sentence is the same blanked line on both
+     * sides, so it is dropped from the reveal even though its rendering
+     * would differ ("blank blank" vs "do blank"). Hearing the sentence
+     * again — half-restored, plus a leftover letter hint — wastes the
+     * driver's time; replaying the question is one swipe/word away.
      */
     fun forAnswer(answerText: String, questionText: String = ""): List<Segment> {
-        val segments = render(answerText)
-        if (questionText.isEmpty()) return segments
+        if (questionText.isEmpty()) return render(answerText)
 
-        val heard = render(questionText)
-            .filterIsInstance<Segment.Speech>()
-            .mapTo(HashSet()) { normalize(it.text) }
+        val seen = questionText.lines().mapTo(HashSet()) { normalize(it) }
+        val fresh = answerText.lines()
+            .filter { it.isNotBlank() && normalize(it) !in seen }
+        val segments = render(fresh.joinToString("\n"))
 
-        val out = mutableListOf<Segment>()
-        var i = 0
-        while (i < segments.size) {
-            val seg = segments[i]
-            if (seg is Segment.Speech && normalize(seg.text) in heard) {
-                i++ // skip the redundant line
-                if (i < segments.size && segments[i] is Segment.Pause) i++ // and its pause
-                continue
-            }
-            out += seg
-            i++
-        }
         // If everything was redundant, better to repeat than to stay silent.
-        return if (out.any { it is Segment.Speech }) out else segments
+        return if (segments.any { it is Segment.Speech }) segments else render(answerText)
     }
 
     private fun normalize(s: String): String = s.lowercase()
