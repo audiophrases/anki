@@ -60,7 +60,7 @@
             android:backgroundTint="#5C6BC0"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            android:text="🌙  Eyes-free session (screen off)"
+            android:text="🌙  Eyes-free (screen off)"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="18sp" />
@@ -190,7 +190,7 @@
                 android:backgroundTint="#616161"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
-                android:text="↩  Undo rating"
+                android:text="↩  Undo"
                 android:textAllCaps="false"
                 android:textColor="#FFFFFF"
                 android:textSize="16sp" />

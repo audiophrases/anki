@@ -32,6 +32,14 @@ class VoiceControl(
         const val RESTART_DELAY_MS = 300L
         const val COMMAND_DEBOUNCE_MS = 1200L
 
+        /**
+         * Some ROMs advertise on-device recognition but every session fails
+         * (e.g. TOO_MANY_REQUESTS with Android System Intelligence missing).
+         * After this many hard errors with no successful mic-open, switch to
+         * the default recognition service.
+         */
+        const val FALLBACK_AFTER_ERRORS = 3
+
         val WORD_TO_COMMAND = mapOf(
             "show" to Command.REVEAL,
             "answer" to Command.REVEAL,
@@ -60,12 +68,15 @@ class VoiceControl(
     private var listening = false
     private var paused = false
     private var lastCommandAt = 0L
+    private var usingOnDevice = false
+    private var hardErrors = 0
 
     fun start() {
         if (running) return
         recognizer = when {
             SpeechRecognizer.isOnDeviceRecognitionAvailable(context) -> {
                 Log.i(TAG, "using on-device recognizer")
+                usingOnDevice = true
                 SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             }
             SpeechRecognizer.isRecognitionAvailable(context) -> {
@@ -80,6 +91,23 @@ class VoiceControl(
         recognizer?.setRecognitionListener(listener)
         running = true
         listen()
+    }
+
+    /** The on-device recognizer is broken here; retry with the default service. */
+    private fun fallBackToDefaultService() {
+        usingOnDevice = false
+        hardErrors = 0
+        recognizer?.destroy()
+        recognizer = null
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            Log.w(TAG, "no default recognition service either; voice control off")
+            running = false
+            return
+        }
+        Log.w(TAG, "on-device recognizer keeps failing; switching to default service")
+        recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        recognizer?.setRecognitionListener(listener)
+        relistenSoon()
     }
 
     fun stop() {
@@ -173,16 +201,23 @@ class VoiceControl(
                 return
             }
             // Timeouts / no-match are the normal idle case — keep looping.
-            if (error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT &&
-                error != SpeechRecognizer.ERROR_NO_MATCH
+            if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
+                error == SpeechRecognizer.ERROR_NO_MATCH
             ) {
+                Log.i(TAG, "idle: ${errorName(error)}")
+            } else {
                 Log.w(TAG, "recognizer error: ${errorName(error)}")
+                if (usingOnDevice && ++hardErrors >= FALLBACK_AFTER_ERRORS) {
+                    fallBackToDefaultService()
+                    return
+                }
             }
             relistenSoon()
         }
 
         override fun onReadyForSpeech(params: Bundle?) {
             Log.i(TAG, "mic open")
+            hardErrors = 0
         }
 
         override fun onBeginningOfSpeech() {

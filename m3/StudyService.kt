@@ -156,6 +156,7 @@ class StudyService : Service() {
         requestAudioFocus()
         if (!withVoice) captureVolumeKeys() else releaseVolumeKeys()
         if (withVoice) {
+            voice?.stop() // re-tapping Car mode must not leak a second listener
             voice = VoiceControl(this) { cmd -> onVoiceCommand(cmd) }
             // Mic listens only between TTS playbacks (it would hear Andrew).
             speaker.onPlaybackStart = { voice?.pause() }
