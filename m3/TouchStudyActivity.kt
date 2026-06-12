@@ -35,11 +35,17 @@ import kotlinx.coroutines.launch
  *
  * Every action answers back with haptics + speech, so eyes stay closed.
  * Volume keys stay ordinary volume keys here — touch has enough inputs.
+ *
+ * Car mode ([EXTRA_VOICE]) runs this same surface with spoken commands on
+ * top of the gestures, so the driver can keep both hands on the wheel but
+ * still tap blindly when voice is awkward. The backlight is forced to
+ * minimum either way — the panel is LCD, so black alone still glows.
  */
 class TouchStudyActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_DECK = "deck"
+        const val EXTRA_VOICE = "voice"
         const val BOOKMARK_TAG = "audio-bookmark"
     }
 
@@ -47,6 +53,7 @@ class TouchStudyActivity : AppCompatActivity() {
     private lateinit var engine: StudyEngine
     private lateinit var root: FrameLayout
     private lateinit var stateView: TextView
+    private var voice: VoiceControl? = null
 
     /** Multi-finger handling: suppress single-finger gestures around it. */
     private var twoFingerDownAt = 0L
@@ -79,6 +86,7 @@ class TouchStudyActivity : AppCompatActivity() {
         setContentView(root)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.attributes = window.attributes.apply { screenBrightness = 0.01f }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, root).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -186,14 +194,44 @@ class TouchStudyActivity : AppCompatActivity() {
         // Only one engine may study at a time.
         stopService(Intent(this, StudyService::class.java))
 
+        if (intent.getBooleanExtra(EXTRA_VOICE, false)) {
+            voice = VoiceControl(this) { cmd -> onVoiceCommand(cmd) }
+            // Mic listens only between TTS playbacks (it would hear Andrew).
+            speaker.onPlaybackStart = { voice?.pause() }
+            speaker.onPlaybackEnd = { voice?.resume() }
+            voice?.start()
+        }
+
         val deckName = intent.getStringExtra(EXTRA_DECK) ?: MainActivity.DEFAULT_DECK_NAME
         lifecycleScope.launch { if (!engine.start(deckName)) finish() }
     }
 
     override fun onDestroy() {
+        voice?.stop()
         engine.stopBlocking() // commits a pending rating
         speaker.shutdown()
         super.onDestroy()
+    }
+
+    private fun onVoiceCommand(cmd: VoiceControl.Command) {
+        lifecycleScope.launch {
+            when (cmd) {
+                VoiceControl.Command.REVEAL ->
+                    if (!engine.answerShown) engine.reveal()
+                VoiceControl.Command.REPEAT -> engine.replay()
+                VoiceControl.Command.GOOD ->
+                    if (engine.answerShown) engine.rate(AnkiDroidApi.EASE_GOOD)
+                VoiceControl.Command.EASY ->
+                    if (engine.answerShown) engine.rate(AnkiDroidApi.EASE_EASY)
+                VoiceControl.Command.HARD ->
+                    if (engine.answerShown) engine.rate(AnkiDroidApi.EASE_HARD)
+                VoiceControl.Command.AGAIN ->
+                    if (engine.answerShown) engine.rate(AnkiDroidApi.EASE_AGAIN)
+                VoiceControl.Command.UNDO -> engine.undo()
+                VoiceControl.Command.BOOKMARK -> engine.bookmark(BOOKMARK_TAG)
+                VoiceControl.Command.STOP -> stopAndExit()
+            }
+        }
     }
 
     /** Four-finger tap: commit, say goodbye, return to the start screen. */

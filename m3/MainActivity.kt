@@ -57,7 +57,7 @@ class MainActivity : AppCompatActivity() {
     private val requestMicPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) startSession(voice = true)
+        if (granted) startCarMode()
         else status("Microphone permission denied — car mode needs it.")
     }
 
@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.carButton).setOnClickListener {
             val mic = android.Manifest.permission.RECORD_AUDIO
             if (checkSelfPermission(mic) == PackageManager.PERMISSION_GRANTED) {
-                startSession(voice = true)
+                startCarMode()
             } else {
                 requestMicPermission.launch(mic)
             }
@@ -202,6 +202,20 @@ class MainActivity : AppCompatActivity() {
 
     // ---- eyes-free session ----
 
+    /** Car mode: bed mode's dark gesture surface + spoken commands. */
+    private fun startCarMode() {
+        lifecycleScope.launch { if (engine.active) engine.stop() }
+        startActivity(
+            Intent(this, TouchStudyActivity::class.java)
+                .putExtra(TouchStudyActivity.EXTRA_DECK, selectedDeckName())
+                .putExtra(TouchStudyActivity.EXTRA_VOICE, true)
+        )
+        status(
+            "Car mode — speak between playbacks: show · repeat · good · easy · " +
+                "hard · again · undo · bookmark · stop. Bed-mode gestures work too."
+        )
+    }
+
     private fun startSession(voice: Boolean) {
         lifecycleScope.launch { if (engine.active) engine.stop() }
         startForegroundService(
@@ -211,14 +225,8 @@ class MainActivity : AppCompatActivity() {
                 .putExtra(StudyService.EXTRA_VOICE, voice)
         )
         status(
-            if (voice) {
-                "Car mode running — speak between playbacks: show · repeat · " +
-                    "good · easy · hard · again · undo · bookmark · stop. " +
-                    "Volume keys change volume as usual."
-            } else {
-                "Session running — set your volume now, then lock the screen. " +
-                    "Vol-up: reveal/Good · vol-down: replay/Again. Undo is in the notification."
-            }
+            "Session running — set your volume now, then lock the screen. " +
+                "Vol-up: reveal/Good · vol-down: replay/Again. Undo is in the notification."
         )
     }
 

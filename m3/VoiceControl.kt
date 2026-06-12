@@ -40,6 +40,13 @@ class VoiceControl(
          */
         const val FALLBACK_AFTER_ERRORS = 3
 
+        /**
+         * Sticky across sessions (process-wide): once the on-device recognizer
+         * proves broken, later instances go straight to the default service
+         * instead of spending ~15s rediscovering the failure.
+         */
+        var onDeviceBroken = false
+
         val WORD_TO_COMMAND = mapOf(
             "show" to Command.REVEAL,
             "answer" to Command.REVEAL,
@@ -74,7 +81,7 @@ class VoiceControl(
     fun start() {
         if (running) return
         recognizer = when {
-            SpeechRecognizer.isOnDeviceRecognitionAvailable(context) -> {
+            !onDeviceBroken && SpeechRecognizer.isOnDeviceRecognitionAvailable(context) -> {
                 Log.i(TAG, "using on-device recognizer")
                 usingOnDevice = true
                 SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
@@ -95,6 +102,7 @@ class VoiceControl(
 
     /** The on-device recognizer is broken here; retry with the default service. */
     private fun fallBackToDefaultService() {
+        onDeviceBroken = true
         usingOnDevice = false
         hardErrors = 0
         recognizer?.destroy()
