@@ -159,7 +159,7 @@ object AudioScript {
             // Example sentence: recognition words drop back in restored;
             // production words become the codeword so the sentence flows.
             val tokenValues = tokens.map { it.value }
-            val restored = restoreInline(tokenValues, candidates)
+            val restored = restoreInline(tokenValues, candidates, line)
             var idx = -1
             val rendered = line.replace(BLANK_TOKEN) {
                 idx++
@@ -182,40 +182,76 @@ object AudioScript {
         return out
     }
 
+    /** Dictionary lemma markers that head a phrase but never appear literally
+     *  in its example sentence ("be sb out of sth"), so their absence from the
+     *  sentence must not veto a restore. */
+    private val PHRASE_PLACEHOLDER = setOf("be", "sb", "sth", "one", "ones", "oneself", "your", "yours")
+
     /**
      * Restores every blank token in one example line.
      *
      * Each token is first matched independently against the visible words
      * ([restore]). That alone fails for a word hidden with no visible letters —
-     * the second word of a phrase like "stay put", rendered "•••" — so even on
-     * the recognition side (the whole phrase is on screen) it would be spoken
-     * as the codeword.
+     * "put" in "stay put", rendered "•••" — so even on the recognition side
+     * (the whole phrase is on screen) it would be spoken as the codeword.
      *
-     * Recovery, applied only when the evidence is unambiguous: when the line
-     * has exactly as many blanks as there are visible candidate words, the
-     * blanks line up with those words one-for-one. That alignment is trusted
-     * only if
-     *   - at least one blank *strictly* restores to its own slot, proving the
-     *     candidates really are this sentence's hidden phrase and not, say, the
-     *     definition shown on the production side, and
-     *   - every blank's visible letters are consistent with its slot (a bare
-     *     "•••" must match the word's length; a shown stem/ending must agree),
-     * after which the still-empty slots are filled straight from the phrase.
+     * Recovery: the example masks a subsequence of the visible phrase
+     * ("That's b••••• the •••••" hides "beside" and "point" out of "That's
+     * beside the point"), so the blanks are aligned in order to the candidate
+     * words they fit, and the unfilled slots are taken straight from the phrase.
+     * The alignment is trusted only with hard evidence it is the recognition
+     * side, never the production side where the candidates would be the
+     * definition:
+     *   - every confident per-token match lands on its aligned slot,
+     *   - at least one blank *strictly* restores to its slot, and
+     *   - the phrase words we did *not* mask actually occur in the sentence
+     *     (a placeholder lemma like "be"/"sth" is allowed to be absent).
      * Otherwise each token keeps its independent result (null → codeword).
      */
-    private fun restoreInline(tokens: List<String>, candidates: List<String>): List<String?> {
+    private fun restoreInline(tokens: List<String>, candidates: List<String>, line: String): List<String?> {
         val perToken = tokens.map { restore(it, candidates) }
-        if (tokens.size != candidates.size || candidates.isEmpty()) return perToken
+        if (candidates.isEmpty() || tokens.size > candidates.size) return perToken
         if (perToken.none { it == null }) return perToken
 
-        val slot = tokens.mapIndexed { i, t -> restore(t, listOf(candidates[i])) }
-        val alignmentConsistent = perToken.indices.all { i -> perToken[i] == null || perToken[i] == slot[i] }
-        val hasStrictAnchor = slot.any { it != null }
-        val lettersFit = tokens.indices.all { i -> blankFitsWord(tokens[i], candidates[i]) }
-        if (!alignmentConsistent || !hasStrictAnchor || !lettersFit) return perToken
+        val assigned = alignToPhrase(tokens, candidates) ?: return perToken
+        val slot = tokens.mapIndexed { i, t -> restore(t, listOf(candidates[assigned[i]])) }
 
-        return perToken.mapIndexed { i, r -> r ?: candidates[i] }
+        val consistent = perToken.indices.all { i -> perToken[i] == null || perToken[i] == slot[i] }
+        val hasStrictAnchor = slot.any { it != null }
+        if (!consistent || !hasStrictAnchor) return perToken
+
+        val visible = visibleWords(line)
+        val masked = assigned.toHashSet()
+        val gapsPresent = candidates.indices.all { j ->
+            j in masked ||
+                candidates[j].lowercase() in visible ||
+                candidates[j].lowercase() in PHRASE_PLACEHOLDER
+        }
+        if (!gapsPresent) return perToken
+
+        return perToken.mapIndexed { i, r -> r ?: candidates[assigned[i]] }
     }
+
+    /** Greedily maps each blank, left to right, to the next candidate word it
+     *  could be ([blankFitsWord]); null if any blank has no fitting word. */
+    private fun alignToPhrase(tokens: List<String>, candidates: List<String>): List<Int>? {
+        val out = ArrayList<Int>(tokens.size)
+        var next = 0
+        for (t in tokens) {
+            var j = next
+            while (j < candidates.size && !blankFitsWord(t, candidates[j])) j++
+            if (j >= candidates.size) return null
+            out += j
+            next = j + 1
+        }
+        return out
+    }
+
+    /** Lower-cased fully-visible words of [line] (blank tokens removed first, so
+     *  a masked word's stray letters don't count as visible). */
+    private fun visibleWords(line: String): Set<String> =
+        CANDIDATE_WORD.findAll(BLANK_TOKEN.replace(line, " "))
+            .mapTo(HashSet()) { it.value.lowercase() }
 
     /**
      * True when [token]'s visible letters don't contradict [word], used to
