@@ -158,11 +158,12 @@ object AudioScript {
 
             // Example sentence: recognition words drop back in restored;
             // production words become the codeword so the sentence flows.
-            val rendered = line.replace(BLANK_TOKEN) { m ->
-                restore(m.value, candidates) ?: run {
-                    unrestoredInline += m.value
-                    CODEWORD
-                }
+            val tokenValues = tokens.map { it.value }
+            val restored = restoreInline(tokenValues, candidates)
+            var idx = -1
+            val rendered = line.replace(BLANK_TOKEN) {
+                idx++
+                restored[idx] ?: run { unrestoredInline += tokenValues[idx]; CODEWORD }
             }
             out += Segment.Speech(expandAbbreviations(rendered))
             out += Segment.Pause(LINE_PAUSE_MS)
@@ -179,6 +180,54 @@ object AudioScript {
             out += Segment.Pause(LINE_PAUSE_MS)
         }
         return out
+    }
+
+    /**
+     * Restores every blank token in one example line.
+     *
+     * Each token is first matched independently against the visible words
+     * ([restore]). That alone fails for a word hidden with no visible letters —
+     * the second word of a phrase like "stay put", rendered "•••" — so even on
+     * the recognition side (the whole phrase is on screen) it would be spoken
+     * as the codeword.
+     *
+     * Recovery, applied only when the evidence is unambiguous: when the line
+     * has exactly as many blanks as there are visible candidate words, the
+     * blanks line up with those words one-for-one. That alignment is trusted
+     * only if
+     *   - at least one blank *strictly* restores to its own slot, proving the
+     *     candidates really are this sentence's hidden phrase and not, say, the
+     *     definition shown on the production side, and
+     *   - every blank's visible letters are consistent with its slot (a bare
+     *     "•••" must match the word's length; a shown stem/ending must agree),
+     * after which the still-empty slots are filled straight from the phrase.
+     * Otherwise each token keeps its independent result (null → codeword).
+     */
+    private fun restoreInline(tokens: List<String>, candidates: List<String>): List<String?> {
+        val perToken = tokens.map { restore(it, candidates) }
+        if (tokens.size != candidates.size || candidates.isEmpty()) return perToken
+        if (perToken.none { it == null }) return perToken
+
+        val slot = tokens.mapIndexed { i, t -> restore(t, listOf(candidates[i])) }
+        val alignmentConsistent = perToken.indices.all { i -> perToken[i] == null || perToken[i] == slot[i] }
+        val hasStrictAnchor = slot.any { it != null }
+        val lettersFit = tokens.indices.all { i -> blankFitsWord(tokens[i], candidates[i]) }
+        if (!alignmentConsistent || !hasStrictAnchor || !lettersFit) return perToken
+
+        return perToken.mapIndexed { i, r -> r ?: candidates[i] }
+    }
+
+    /**
+     * True when [token]'s visible letters don't contradict [word], used to
+     * confirm a positional fill. A fully hidden blank must match the word's
+     * length exactly; otherwise the shown stem and/or ending must agree.
+     */
+    private fun blankFitsWord(token: String, word: String): Boolean {
+        val b = parseBlank(token)
+        if (b.prefix.isEmpty() && b.suffix.isEmpty()) return word.length == b.length
+        if (b.prefix.isNotEmpty() && !word.startsWith(b.prefix, ignoreCase = true)) return false
+        if (b.suffix.isNotEmpty() && !word.endsWith(b.suffix, ignoreCase = true)) return false
+        return word.length >= b.prefix.length + b.suffix.length
     }
 
     private data class Blank(val prefix: String, val suffix: String, val bullets: Int) {
