@@ -48,17 +48,25 @@ object EdgeTts {
 
     /** Returns a cached or freshly synthesized MP3 for [text]. Throws on failure. */
     suspend fun synthesize(context: Context, text: String, voice: String = DEFAULT_VOICE): File {
-        val dir = File(context.cacheDir, "tts").apply { mkdirs() }
-        val cached = File(dir, sha256Hex("$voice|$text").take(40) + ".mp3")
+        val cached = TtsCache.fileFor(context, voice, text)
         if (cached.length() > 0) {
             Log.i(TAG, "cache hit for \"${text.take(40)}\"")
+            TtsCache.touch(cached) // refresh last-used time for LRU eviction
             return cached
         }
         Log.i(TAG, "cache miss, requesting \"${text.take(40)}\"")
         // OkHttp read timeouts don't apply to websocket streams, and the server
         // can close without sending audio — bound the whole exchange ourselves.
         val bytes = kotlinx.coroutines.withTimeout(15_000) { requestAudio(text, voice) }
-        cached.writeBytes(bytes)
+        // Write to a temp file then atomically swap it in: a cancelled write, or
+        // two workers racing the same key, can never leave a half-written MP3
+        // that a later run would mistake for a valid cache hit.
+        val tmp = File(cached.parentFile, "${cached.name}.${UUID.randomUUID()}.tmp")
+        tmp.writeBytes(bytes)
+        if (!tmp.renameTo(cached)) {
+            tmp.copyTo(cached, overwrite = true)
+            tmp.delete()
+        }
         Log.i(TAG, "synthesized ${bytes.size} bytes for \"${text.take(40)}\"")
         return cached
     }

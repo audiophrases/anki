@@ -56,6 +56,43 @@ lazy-commit ratings (undo-able until the next rating), recognition/production
 blank reading (restored words vs spoken hints — see ../GESTURES.md), Edge TTS
 with cache + fallback.
 
+## Background audio prefetch + bounded cache (verified on-device 2026-06-13)
+
+Every card now warms the audio of the **next few cards** before you reach
+them, so playback rarely waits on the network and the session keeps flowing
+through brief connectivity drops. The cache that backs it is now capped, so it
+no longer grows without limit.
+
+- `TtsPrefetcher.kt` (new) — when `StudyEngine` presents a card it hands the
+  prefetcher the next `PREFETCH_AHEAD` (=3) due cards (fetched in the *same*
+  schedule query, so no extra round-trips). It synthesizes each card's full
+  question + answer script in the background, **one request at a time** (a
+  `Mutex` serializes it — gentle on the unofficial endpoint, plenty to stay
+  ahead of a human reader). De-duplicated against what's already cached or
+  queued; cancelled wholesale when the session stops. Best-effort: a failed
+  prefetch is swallowed (playback synthesizes on demand + falls back to
+  platform TTS as before). The playback path never waits on the lock, so a real
+  card is never delayed by prefetching.
+- `TtsCache.kt` (new) — owns the on-disk MP3 store (path/key, last-used
+  `touch`, and `trim`). `trim` runs after every prefetch batch: drops entries
+  unused for 30 days, then, if still over ~80 MB, evicts least-recently-used
+  ones down to ~50 MB. A cache *hit* touches the file so frequently-studied
+  cards survive eviction (real LRU). Cheap and idempotent.
+- `EdgeTts.kt` now routes its cache lookup through `TtsCache` and writes new
+  MP3s via **temp-file + atomic rename**, so a cancelled or racing write can
+  never leave a half-written file that later reads as a valid cache hit.
+- `StudyEngine.kt` owns one `TtsPrefetcher`, fans the lookahead cards to it in
+  `loadNext`, and cancels it in `stop`/`stopBlocking`. All three study surfaces
+  (in-app, screen-off service, bed/car) build their own engine, so every mode
+  gets prefetch + cleanup for free.
+
+Verified by driving an in-app round over `adb`: the current card's question
+played from cache (`EdgeTts: cache hit …`) while the next cards were
+synthesized in the background (`cache miss, requesting …` / `synthesized N
+bytes`), with no jank and no crash. (Reading the device cache dir directly
+isn't possible — `run-as` is broken on this ROM — so verification is via the
+enlarged logcat buffer, `adb logcat -G 16M`.)
+
 ## Verified on-device
 
 start → tap reveal → bottom-tap Good (pending) → next card → swipe-down

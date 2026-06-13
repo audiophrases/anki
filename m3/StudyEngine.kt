@@ -25,9 +25,15 @@ class StudyEngine(
 
     private companion object {
         const val TAG = "StudyEngine"
+
+        /** Cards to warm the TTS cache for beyond the one being presented. */
+        const val PREFETCH_AHEAD = 3
     }
 
     private data class Pending(val card: AnkiDroidApi.DueCard, val ease: Int, val timeTakenMs: Long)
+
+    /** Warms upcoming cards' audio in the background; cancelled when we stop. */
+    private val prefetcher = TtsPrefetcher(context)
 
     var deck: AnkiDroidApi.Deck? = null
         private set
@@ -66,6 +72,7 @@ class StudyEngine(
     suspend fun stop() {
         active = false
         speaker.stop()
+        prefetcher.stop()
         commitPending()
         current = null
         answerShown = false
@@ -76,6 +83,7 @@ class StudyEngine(
     fun stopBlocking() {
         active = false
         speaker.stop()
+        prefetcher.stop()
         runBlocking { commitPending() }
     }
 
@@ -152,10 +160,14 @@ class StudyEngine(
         val d = deck ?: return
         val excluded = pending?.card
 
-        var next = withContext(Dispatchers.IO) {
+        // Fetch the next card plus a few extra to warm their audio ahead of time
+        // (one query for the lot — the schedule queue is already in show order).
+        val want = (if (excluded == null) 1 else 2) + PREFETCH_AHEAD
+        val upcoming = withContext(Dispatchers.IO) {
             AnkiDroidApi.selectDeck(context, d.id)
-            AnkiDroidApi.nextDueCards(context, d.id, if (excluded == null) 1 else 2)
-        }.firstOrNull { excluded == null || it.noteId != excluded.noteId || it.ord != excluded.ord }
+            AnkiDroidApi.nextDueCards(context, d.id, want)
+        }.filter { excluded == null || it.noteId != excluded.noteId || it.ord != excluded.ord }
+        var next = upcoming.firstOrNull()
 
         if (next == null && excluded != null) {
             // Only the pending card remains in the queue: commit it (losing the
@@ -187,6 +199,9 @@ class StudyEngine(
             addAll(questionScript)
         }
         speaker.speak(script)
+        // Warm the cards coming up after this one (also trims the cache). The
+        // current card is already being synthesized by the playback above.
+        prefetcher.prefetch(upcoming.drop(1).take(PREFETCH_AHEAD), EdgeVoices.savedVoice(context))
         onState("Question · up: reveal · down: replay")
         Log.i(TAG, "question note=${next.noteId} ord=${next.ord}")
     }
