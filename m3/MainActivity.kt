@@ -36,11 +36,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var answerView: TextView
     private lateinit var statusView: TextView
     private lateinit var deckSpinner: Spinner
+    private lateinit var voiceSpinner: Spinner
     private lateinit var studyButton: Button
     private lateinit var speaker: CardSpeaker
     private lateinit var engine: StudyEngine
 
     private var decks: List<AnkiDroidApi.Deck> = emptyList()
+    private var voices: List<EdgeVoices.Voice> = emptyList()
 
     private val prefs by lazy { getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
@@ -75,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         answerView = findViewById(R.id.answerView)
         statusView = findViewById(R.id.statusView)
         deckSpinner = findViewById(R.id.deckSpinner)
+        voiceSpinner = findViewById(R.id.voiceSpinner)
         studyButton = findViewById(R.id.studyButton)
         speaker = CardSpeaker(this, lifecycleScope)
         engine = StudyEngine(this, speaker) { msg ->
@@ -111,6 +114,9 @@ class MainActivity : AppCompatActivity() {
             )
         }
         studyButton.setOnClickListener { toggleStudy() }
+        findViewById<Button>(R.id.testVoiceButton).setOnClickListener {
+            speaker.speak(listOf(Segment.Speech("This is the voice you will hear while studying.")))
+        }
         findViewById<Button>(R.id.replayButton).setOnClickListener { engine.replayQuestion() }
         findViewById<Button>(R.id.showButton).setOnClickListener {
             lifecycleScope.launch { engine.reveal() }
@@ -132,6 +138,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             requestPermission.launch(perm)
         }
+
+        // Voice list is independent of AnkiDroid — load it either way.
+        populateVoices()
     }
 
     override fun onDestroy() {
@@ -176,6 +185,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectedDeckName(): String = prefs.getString(PREF_DECK, DEFAULT_DECK_NAME)!!
+
+    // ---- voice picking ----
+
+    /**
+     * Fill the voice spinner with the full Edge catalog (English first) and
+     * keep the learner's choice. The list loads asynchronously — network on a
+     * cold first run, then from the on-disk cache — and applies to every study
+     * mode via [EdgeVoices.savedVoice], read by [CardSpeaker] per utterance.
+     */
+    private fun populateVoices() {
+        lifecycleScope.launch {
+            voices = EdgeVoices.list(this@MainActivity)
+            if (voices.isEmpty()) return@launch
+            voiceSpinner.adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                voices.map { it.label }
+            )
+            val saved = EdgeVoices.savedVoice(this@MainActivity)
+            val savedIdx = voices.indexOfFirst { it.shortName == saved }
+            voiceSpinner.setSelection(savedIdx.coerceAtLeast(0), false)
+            // Consume the one programmatic selection above so we never overwrite
+            // a saved voice that isn't in this (possibly offline fallback) list.
+            var initial = true
+            voiceSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: AdapterView<*>?, view: View?, position: Int, id: Long
+                ) {
+                    if (initial) { initial = false; return }
+                    EdgeVoices.saveVoice(this@MainActivity, voices[position].shortName)
+                    status("Voice set: ${voices[position].label}. Press Test voice to hear it.")
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            }
+        }
+    }
 
     // ---- in-app study ----
 

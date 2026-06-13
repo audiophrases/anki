@@ -27,6 +27,28 @@ cards later on desktop with `tag:audio-bookmark`.
 
 Volume keys deliberately stay ordinary volume keys in this mode.
 
+## Voice selector
+
+The start screen has a **Voice** dropdown listing the full Edge neural-TTS
+catalog (~320 voices, every language — English sorted to the top) plus a
+**🔊 Test voice** button to hear the current pick. The choice is saved and
+applies to every mode (in-app, screen-off, bed, car) on the next card — no
+restart needed.
+
+- `EdgeVoices.kt` (new) fetches the catalog once from the Read-Aloud
+  `voices/list` endpoint (plain GET, no token dance), caches it in
+  `cacheDir/edge-voices.json` (refreshed monthly, works offline after the
+  first load), and falls back to a short bundled list if a cold first run has
+  no network. It also owns the saved-voice preference (`savedVoice` /
+  `saveVoice`, prefs key `voice`).
+- `CardSpeaker.kt` is **replaced**: `speakText` now reads `EdgeVoices.savedVoice`
+  per utterance and passes it to `EdgeTts.synthesize` (which already took a
+  `voice` argument — `EdgeTts.kt` is unchanged). All three study modes share
+  `CardSpeaker`, so none of them needed touching.
+- `MainActivity.kt` / `activity_main.xml` gain the spinner + test button.
+
+No new Gradle dependencies (OkHttp + `org.json` are already available).
+
 ## Shares everything with the other modes
 
 Same `StudyEngine` as the in-app buttons and the screen-off session:

@@ -28,6 +28,32 @@
             android:layout_marginBottom="8dp" />
 
         <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingBottom="4dp"
+            android:text="Voice"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/voiceSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="56dp" />
+
+        <Button
+            android:id="@+id/testVoiceButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:backgroundTint="#607D8B"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🔊  Test voice"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <TextView
             android:id="@+id/statusView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
