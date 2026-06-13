@@ -63,7 +63,11 @@ was revealed; "again/wrong" while the question plays does nothing.
 ## 📱 In-app buttons (screen on)
 
 **▶ Start study (here)** / **■ Stop study**, then Replay · Show answer ·
-Good · Again · **↩ Undo last rating**.
+Good · Again · **↩ Undo last rating** · **✏ Edit card**.
+
+**✏ Edit card** appears only during an in-app round (it needs the card on
+screen). It opens a box per note field, writes your edits straight back to
+AnkiDroid, and re-reads the card so a replay reflects the change.
 
 ## Terminology (how cards are read aloud)
 

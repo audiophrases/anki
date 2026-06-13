@@ -133,6 +133,23 @@ class StudyEngine(
         speaker.speak(listOf(Segment.Speech(if (ok) "Bookmarked." else "Bookmark failed.")))
     }
 
+    /**
+     * Re-reads the current card's text after its note was edited in-app and
+     * rebuilds the spoken scripts, so a replay/reveal reflects the change.
+     */
+    suspend fun reloadCurrent() {
+        if (!active) return
+        val card = current ?: return
+        val refreshed = withContext(Dispatchers.IO) {
+            runCatching { AnkiDroidApi.reloadCard(context, card) }.getOrNull()
+        } ?: return
+        current = refreshed
+        questionScript = AudioScript.forQuestion(refreshed.question)
+        answerScript = AudioScript.forAnswer(refreshed.answer, refreshed.question)
+        onState(if (answerShown) "Answer (edited)" else "Question (edited)")
+        Log.i(TAG, "reloaded edited note=${refreshed.noteId}")
+    }
+
     /** Reverts the last rating, if it hasn't been committed yet. */
     suspend fun undo() {
         if (!active) return

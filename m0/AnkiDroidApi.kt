@@ -30,6 +30,9 @@ object AnkiDroidApi {
     const val EASE_GOOD = 3
     const val EASE_EASY = 4
 
+    /** A note's field values are stored joined by this separator inside `flds`. */
+    private const val FIELD_SEPARATOR = "\u001f"
+
     data class DueCard(
         val noteId: Long,
         val ord: Int,
@@ -172,6 +175,56 @@ object AnkiDroidApi {
         if (tag in tags.split(' ', ',')) return true
         val values = ContentValues().apply { put("tags", "$tags $tag".trim()) }
         return context.contentResolver.update(uri, values, null, null) > 0
+    }
+
+    /** A note's editable fields: the model's field names paired with current values. */
+    data class NoteFields(val names: List<String>, val values: List<String>)
+
+    /**
+     * Reads a note's raw field values (and the model's field names) for manual
+     * editing. Values come from the note's `flds`, split on the 0x1f separator;
+     * names from the note's model. Returns null if the note can't be read.
+     */
+    fun noteFields(context: Context, noteId: Long): NoteFields? {
+        val noteUri = Uri.parse("content://$AUTHORITY/notes/$noteId")
+        var mid = -1L
+        var flds: String? = null
+        context.contentResolver.query(noteUri, arrayOf("mid", "flds"), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return null
+            mid = c.getLong(c.getColumnIndexOrThrow("mid"))
+            flds = c.getString(c.getColumnIndexOrThrow("flds"))
+        } ?: return null
+        val values = (flds ?: "").split(FIELD_SEPARATOR)
+        val names = modelFieldNames(context, mid) ?: List(values.size) { "Field ${it + 1}" }
+        return NoteFields(names, values)
+    }
+
+    /** Field names declared by a note type (model), in display order. */
+    private fun modelFieldNames(context: Context, modelId: Long): List<String>? {
+        val modelUri = Uri.parse("content://$AUTHORITY/models/$modelId")
+        context.contentResolver.query(modelUri, arrayOf("field_names"), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return null
+            val raw = c.getString(c.getColumnIndexOrThrow("field_names")) ?: return null
+            return raw.split(FIELD_SEPARATOR)
+        }
+        return null
+    }
+
+    /**
+     * Writes edited field [values] back to a note (joined by the 0x1f separator).
+     * AnkiDroid rewrites the note and re-renders its cards; the field count must
+     * match the note's existing fields. Returns true if a row was updated.
+     */
+    fun updateNoteFields(context: Context, noteId: Long, values: List<String>): Boolean {
+        val noteUri = Uri.parse("content://$AUTHORITY/notes/$noteId")
+        val cv = ContentValues().apply { put("flds", values.joinToString(FIELD_SEPARATOR)) }
+        return context.contentResolver.update(noteUri, cv, null, null) > 0
+    }
+
+    /** Re-reads a card's rendered question/answer (e.g. after editing its note). */
+    fun reloadCard(context: Context, card: DueCard): DueCard {
+        val (q, a) = cardText(context, card.noteId, card.ord)
+        return card.copy(question = q, answer = a)
     }
 
     private fun stripHtml(html: String): String {

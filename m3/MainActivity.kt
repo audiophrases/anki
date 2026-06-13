@@ -8,15 +8,21 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Control panel: pick a deck, then either start an in-app study round
@@ -38,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var deckSpinner: Spinner
     private lateinit var voiceSpinner: Spinner
     private lateinit var studyButton: Button
+    private lateinit var editButton: Button
     private lateinit var speaker: CardSpeaker
     private lateinit var engine: StudyEngine
 
@@ -79,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         deckSpinner = findViewById(R.id.deckSpinner)
         voiceSpinner = findViewById(R.id.voiceSpinner)
         studyButton = findViewById(R.id.studyButton)
+        editButton = findViewById(R.id.editButton)
         speaker = CardSpeaker(this, lifecycleScope)
         engine = StudyEngine(this, speaker) { msg ->
             runOnUiThread {
@@ -130,6 +138,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.undoButton).setOnClickListener {
             lifecycleScope.launch { engine.undo() }
         }
+        editButton.setOnClickListener { editCurrentCard() }
 
         // Only list the decks on launch — no card is loaded, nothing speaks.
         val perm = AnkiDroidApi.READ_WRITE_PERMISSION
@@ -243,7 +252,78 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStudyButton() {
-        studyButton.text = if (engine.active) "■  Stop study" else "▶  Start study (here)"
+        val studying = engine.active
+        studyButton.text = if (studying) "■  Stop study" else "▶  Start study (here)"
+        // "Edit card" is offered only for the visual in-app round ("Start study
+        // (here)") — the eyes-free/touch/car modes run in their own screens.
+        editButton.visibility = if (studying) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Manual edit of the card on screen during an in-app study round: load its
+     * note's fields, let the user edit them in a simple dialog, write them back
+     * through AnkiDroid, then re-render so the change is spoken on replay.
+     */
+    private fun editCurrentCard() {
+        val card = engine.current
+        if (!engine.active || card == null) {
+            status("Edit is available only while studying here.")
+            return
+        }
+        lifecycleScope.launch {
+            val fields = withContext(Dispatchers.IO) {
+                runCatching { AnkiDroidApi.noteFields(this@MainActivity, card.noteId) }.getOrNull()
+            }
+            if (fields == null) {
+                status("Couldn't load this card's fields.")
+                return@launch
+            }
+            showEditDialog(card.noteId, fields)
+        }
+    }
+
+    /** One labelled text box per note field; Save writes them back via the provider. */
+    private fun showEditDialog(noteId: Long, fields: AnkiDroidApi.NoteFields) {
+        val density = resources.displayMetrics.density
+        val pad = (16 * density).toInt()
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+        }
+        val inputs = fields.values.mapIndexed { i, value ->
+            container.addView(TextView(this).apply {
+                text = fields.names.getOrElse(i) { "Field ${i + 1}" }
+                textSize = 13f
+                setPadding(0, (8 * density).toInt(), 0, 0)
+            })
+            EditText(this).apply {
+                setText(value)
+                setSelection(text.length)
+                container.addView(this)
+            }
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Edit card")
+            .setView(ScrollView(this).apply { addView(container) })
+            .setPositiveButton("Save") { _, _ ->
+                val newValues = inputs.map { it.text.toString() }
+                lifecycleScope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        runCatching {
+                            AnkiDroidApi.updateNoteFields(this@MainActivity, noteId, newValues)
+                        }.getOrDefault(false)
+                    }
+                    if (ok) {
+                        engine.reloadCurrent()
+                        status("Card saved.")
+                    } else {
+                        status("Saving the edit failed.")
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // ---- eyes-free session ----

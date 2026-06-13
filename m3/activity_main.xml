@@ -225,5 +225,20 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
+        <!-- Shown only during an in-app ("Start study (here)") round. -->
+        <Button
+            android:id="@+id/editButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="12dp"
+            android:backgroundTint="#FB8C00"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="✏  Edit card"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
     </LinearLayout>
 </ScrollView>
