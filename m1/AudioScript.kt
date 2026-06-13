@@ -172,9 +172,12 @@ object AudioScript {
         // Production: speak the letter hint once, after the sentence —
         // from the hint field, or derived from the blanks themselves when
         // the note has no hint field.
+        // Dedupe on the spoken phrase, not the raw token: the same blank can
+        // appear twice with different trailing punctuation ("w••••?" vs "w••••")
+        // yet should be hinted once ("5 letter word starting with W").
         val hint = hintFieldPhrase
-            ?: unrestoredInline.takeIf { it.isNotEmpty() }
-                ?.joinToString(", then a ") { hintPhrase(it) }
+            ?: unrestoredInline.map { hintPhrase(it) }.distinct().takeIf { it.isNotEmpty() }
+                ?.joinToString(", then a ")
         if (hint != null) {
             out += Segment.Speech(hint)
             out += Segment.Pause(LINE_PAUSE_MS)
@@ -317,7 +320,15 @@ object AudioScript {
         val b = parseBlank(token)
         if (b.knowns.isEmpty()) return null   // nothing but bullets — unrecoverable
 
-        candidates.firstOrNull { b.matches(it) }?.let { return it }
+        // A whole-word match must be UNAMBIGUOUS. A weakly-revealed blank like
+        // "w••••" (only the first letter shown) fits many words: on a production
+        // card its only visible "matches" come from the *definition* ("woven",
+        // "woman"), never the hidden answer "weave". If more than one distinct
+        // visible word fits, we can't tell which is meant, so decline rather than
+        // speak a wrong word. On the recognition side the studied word itself is
+        // visible and is the unique fit, so it still restores there.
+        val fits = candidates.filter { b.matches(it) }
+        if (fits.isNotEmpty() && fits.distinctBy { it.lowercase() }.size == 1) return fits.first()
 
         if (b.prefix.isNotEmpty() && b.suffix.isNotEmpty()) {
             candidates.firstOrNull { b.matchesStem(it) }?.let { return it + b.suffix }
