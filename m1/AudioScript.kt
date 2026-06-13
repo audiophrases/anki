@@ -224,46 +224,68 @@ object AudioScript {
      */
     private fun blankFitsWord(token: String, word: String): Boolean {
         val b = parseBlank(token)
-        if (b.prefix.isEmpty() && b.suffix.isEmpty()) return word.length == b.length
+        if (b.knowns.isEmpty()) return word.length == b.length
+        if (b.matches(word) || b.matchesStem(word)) return true
         if (b.prefix.isNotEmpty() && !word.startsWith(b.prefix, ignoreCase = true)) return false
         if (b.suffix.isNotEmpty() && !word.endsWith(b.suffix, ignoreCase = true)) return false
         return word.length >= b.prefix.length + b.suffix.length
     }
 
-    private data class Blank(val prefix: String, val suffix: String, val bullets: Int) {
-        val length get() = prefix.length + bullets + suffix.length
+    /**
+     * One blank decomposed by position. Each bullet hides exactly one
+     * character, so every visible letter sits at a known index. Tracking those
+     * positions — not just a leading/trailing run — is what lets us restore a
+     * word masked with visible letters in the middle, e.g.
+     * "f••b••••••e" → "forbearance" or "th•••••st••ck" → "thunderstruck".
+     */
+    private class Blank(core: String) {
+        val length: Int
+        val knowns: List<Pair<Int, Char>>
+        val prefix: String = core.takeWhile { it != '•' }.filter { it.isLetterOrDigit() }
+        val suffix: String = core.takeLastWhile { it != '•' }.filter { it.isLetterOrDigit() }
+
+        init {
+            val ks = mutableListOf<Pair<Int, Char>>()
+            var pos = 0
+            for (ch in core) {
+                if (ch != '•') ks += pos to ch
+                pos++
+            }
+            length = pos
+            knowns = ks
+        }
+
+        /** [word] fits exactly: same length, every visible letter in its place. */
+        fun matches(word: String): Boolean =
+            word.length == length && knowns.all { (i, c) -> word[i].equals(c, ignoreCase = true) }
+
+        /** [word] is the stem and [suffix] an inflectional ending added in the
+         *  sentence ("wh•••••d": stem "wheedle" + ending "d"). */
+        fun matchesStem(word: String): Boolean {
+            val stemLen = length - suffix.length
+            return word.length == stemLen &&
+                knowns.all { (i, c) -> i >= stemLen || word[i].equals(c, ignoreCase = true) }
+        }
     }
 
-    private fun parseBlank(token: String): Blank {
-        val core = token.trim { !it.isLetterOrDigit() && it != '•' }
-        return Blank(
-            prefix = core.takeWhile { it != '•' }.filter { it.isLetterOrDigit() },
-            suffix = core.takeLastWhile { it != '•' }.filter { it.isLetterOrDigit() },
-            bullets = core.count { it == '•' },
-        )
-    }
+    private fun parseBlank(token: String): Blank =
+        Blank(token.trim { !it.isLetterOrDigit() && it != '•' })
 
     /**
      * Tries to put the hidden word back using words visible on the same side.
-     * Two blank shapes exist in Eugen's decks:
-     *  - whole word, middle hidden:  "m••e"    + "make"    → "make"
-     *  - stem + inflection:          "wh•••••d" + "wheedle" → "wheedled"
+     * Blank shapes seen in Eugen's decks:
+     *  - whole word, letters at fixed spots:  "m••e" / "f••b••••••e" → match in place
+     *  - stem + inflectional ending:          "wh•••••d" + "wheedle" → "wheedled"
      */
     private fun restore(token: String, candidates: List<String>): String? {
         val b = parseBlank(token)
-        if (b.prefix.isEmpty() && b.suffix.isEmpty()) return null
+        if (b.knowns.isEmpty()) return null   // nothing but bullets — unrecoverable
 
-        candidates.firstOrNull {
-            it.length == b.length &&
-                it.startsWith(b.prefix, ignoreCase = true) &&
-                it.endsWith(b.suffix, ignoreCase = true)
-        }?.let { return it }
+        candidates.firstOrNull { b.matches(it) }?.let { return it }
 
-        candidates.firstOrNull {
-            it.length == b.prefix.length + b.bullets &&
-                b.prefix.isNotEmpty() &&
-                it.startsWith(b.prefix, ignoreCase = true)
-        }?.let { return it + b.suffix }
+        if (b.prefix.isNotEmpty() && b.suffix.isNotEmpty()) {
+            candidates.firstOrNull { b.matchesStem(it) }?.let { return it + b.suffix }
+        }
 
         if (b.prefix.length >= 2) {
             candidates.firstOrNull {
