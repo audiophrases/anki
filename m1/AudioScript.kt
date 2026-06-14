@@ -407,16 +407,23 @@ object AudioScript {
         val fits = candidates.filter { b.matches(it) }
         if (fits.isNotEmpty() && fits.distinctBy { it.lowercase() }.size == 1) return fits.first()
 
-        if (b.prefix.isNotEmpty() && b.suffix.isNotEmpty()) {
-            candidates.firstOrNull { b.matchesStem(it) }?.let { return it + b.suffix }
+        // Stem + inflectional ending ("wh•••••d" + "wheedle" → "wheedled"). Needs a
+        // real (>=2 letter) stem prefix and a single fitting candidate: a lone
+        // revealed letter like the "e" of "e••s" otherwise lets the definition's
+        // "etc" pose as the stem → "etcs" (which the voice reads as "ex").
+        if (b.prefix.length >= 2 && b.suffix.isNotEmpty()) {
+            val stems = candidates.filter { b.matchesStem(it) }
+            if (stems.distinctBy { it.lowercase() }.size == 1) return stems.first() + b.suffix
         }
 
+        // Shown stem and ending around a hidden middle, length within one.
         if (b.prefix.length >= 2) {
-            candidates.firstOrNull {
+            val fuzzy = candidates.filter {
                 it.startsWith(b.prefix, ignoreCase = true) &&
                     it.endsWith(b.suffix, ignoreCase = true) &&
                     kotlin.math.abs(it.length - b.length) <= 1
-            }?.let { return it }
+            }
+            if (fuzzy.distinctBy { it.lowercase() }.size == 1) return fuzzy.first()
         }
         return null
     }
