@@ -2,7 +2,13 @@ package com.eugen.ankiaudio
 
 /** One playable unit of a card's audio rendering. */
 sealed interface Segment {
-    data class Speech(val text: String) : Segment
+    /**
+     * Spoken text. [text] is the plain form (used for the platform-TTS fallback
+     * and logging); [ssml] is an optional pre-built SSML inner fragment for the
+     * Edge engine — set when a line needs prosody (e.g. a production blank that
+     * should be slowed and bracketed with pauses).
+     */
+    data class Speech(val text: String, val ssml: String? = null) : Segment
     data class Bleep(val durationMs: Int = 500) : Segment
     data class Pause(val durationMs: Long) : Segment
 }
@@ -76,6 +82,54 @@ object AudioScript {
 
     /** Stand-in spoken for a hidden word inside a production sentence. */
     private const val CODEWORD = "blank"
+
+    // Private-use sentinels that bracket a codeword inside a rendered line, so we
+    // can later wrap just those spans in SSML (they never occur in card text).
+    private const val MARK_OPEN = "\uE000"
+    private const val MARK_CLOSE = "\uE001"
+
+    /** How much Edge slows the spoken blank, and the silence bracketing it. */
+    private const val BLANK_RATE = "-20%"
+    private const val BLANK_PAUSE_MS = 100L
+
+    /**
+     * Splits a rendered line whose codewords are [MARK_OPEN]…[MARK_CLOSE]-marked
+     * into segments that make each production blank stand out: the surrounding
+     * text plays normally, and every blank becomes its own utterance — slowed via
+     * SSML and bracketed by short [BLANK_PAUSE_MS] silences — so the learner
+     * clearly hears *where* the missing word goes instead of it flashing by.
+     *
+     * The blank's SSML is a whole-utterance `<prosody pitch rate volume>` wrapper,
+     * the only shape Edge's read-aloud endpoint accepts (the same one edge-tts
+     * uses); the pauses are real silence segments, not `<break>` (which Edge
+     * rejects). The platform-TTS fallback ignores the SSML and reads "blank".
+     */
+    private fun blankEmphasised(marked: String): List<Segment> {
+        val out = mutableListOf<Segment>()
+        var i = 0
+        while (i < marked.length) {
+            val open = marked.indexOf(MARK_OPEN, i)
+            if (open < 0) {
+                marked.substring(i).trim().takeIf { it.isNotEmpty() }?.let { out += Segment.Speech(it) }
+                break
+            }
+            marked.substring(i, open).trim().takeIf { it.isNotEmpty() }?.let { out += Segment.Speech(it) }
+            val close = marked.indexOf(MARK_CLOSE, open)
+            val word = marked.substring(open + MARK_OPEN.length, close)
+            out += Segment.Pause(BLANK_PAUSE_MS)
+            out += Segment.Speech(word, ssml = slowProsody(word))
+            out += Segment.Pause(BLANK_PAUSE_MS)
+            i = close + MARK_CLOSE.length
+        }
+        return out
+    }
+
+    /** A whole-utterance prosody wrapper (edge-tts's exact shape) that slows [word]. */
+    private fun slowProsody(word: String): String =
+        "<prosody pitch='+0Hz' rate='$BLANK_RATE' volume='+0%'>${escapeXml(word)}</prosody>"
+
+    private fun escapeXml(s: String): String =
+        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     /** Dictionary tags in Eugen's main deck → how the voice should say them. */
     private val SPOKEN_ABBREVIATION = mapOf(
@@ -161,11 +215,21 @@ object AudioScript {
             val tokenValues = tokens.map { it.value }
             val restored = restoreInline(tokenValues, candidates, line)
             var idx = -1
+            var hasBlank = false
             val rendered = line.replace(BLANK_TOKEN) {
                 idx++
-                restored[idx] ?: run { unrestoredInline += tokenValues[idx]; CODEWORD }
+                restored[idx] ?: run {
+                    unrestoredInline += tokenValues[idx]
+                    hasBlank = true
+                    "$MARK_OPEN$CODEWORD$MARK_CLOSE"
+                }
             }
-            out += Segment.Speech(expandAbbreviations(rendered))
+            val expanded = expandAbbreviations(rendered)
+            if (hasBlank) {
+                out += blankEmphasised(expanded)
+            } else {
+                out += Segment.Speech(expanded)
+            }
             out += Segment.Pause(LINE_PAUSE_MS)
         }
 
@@ -206,9 +270,11 @@ object AudioScript {
      * side, never the production side where the candidates would be the
      * definition:
      *   - every confident per-token match lands on its aligned slot,
-     *   - at least one blank *strictly* restores to its slot, and
      *   - the phrase words we did *not* mask actually occur in the sentence
-     *     (a placeholder lemma like "be"/"sth" is allowed to be absent).
+     *     (a placeholder lemma like "be"/"sth" is allowed to be absent), and
+     *   - there is an anchor: either a blank with visible letters lands on its
+     *     slot, or an unmasked phrase word is present in the sentence (which is
+     *     enough to place even a fully-hidden blank like "•••" in "get in").
      * Otherwise each token keeps its independent result (null → codeword).
      */
     private fun restoreInline(tokens: List<String>, candidates: List<String>, line: String): List<String?> {
@@ -220,8 +286,7 @@ object AudioScript {
         val slot = tokens.mapIndexed { i, t -> restore(t, listOf(candidates[assigned[i]])) }
 
         val consistent = perToken.indices.all { i -> perToken[i] == null || perToken[i] == slot[i] }
-        val hasStrictAnchor = slot.any { it != null }
-        if (!consistent || !hasStrictAnchor) return perToken
+        if (!consistent) return perToken
 
         val visible = visibleWords(line)
         val masked = assigned.toHashSet()
@@ -231,6 +296,18 @@ object AudioScript {
                 candidates[j].lowercase() in PHRASE_PLACEHOLDER
         }
         if (!gapsPresent) return perToken
+
+        // Proof this is the masked phrase (recognition), not the definition
+        // (production), so a fully-hidden blank may be filled from the phrase:
+        //   - a blank with visible letters lands on its slot (strict anchor), OR
+        //   - an *unmasked* phrase word actually appears in the sentence — e.g.
+        //     "in" of the headword "get in" in "Her plane ••• in", pinning the
+        //     blank to the missing "get" even though it shows no letters. (The
+        //     parser has no grammar, so it restores the word-field form "get",
+        //     not the sentence's "got" — which is fine on the recognition side.)
+        val hasStrictAnchor = slot.any { it != null }
+        val hasPhraseAnchor = candidates.indices.any { j -> j !in masked && candidates[j].lowercase() in visible }
+        if (!hasStrictAnchor && !hasPhraseAnchor) return perToken
 
         return perToken.mapIndexed { i, r -> r ?: candidates[assigned[i]] }
     }

@@ -46,18 +46,33 @@ object EdgeTts {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    /** Returns a cached or freshly synthesized MP3 for [text]. Throws on failure. */
-    suspend fun synthesize(context: Context, text: String, voice: String = DEFAULT_VOICE): File {
-        val cached = TtsCache.fileFor(context, voice, text)
+    /**
+     * Returns a cached or freshly synthesized MP3 for [text]. Throws on failure.
+     *
+     * When [ssml] is non-null it is sent to Edge verbatim as the `<voice>` body
+     * (the caller has already XML-escaped the literal text and added markup such
+     * as `<prosody>`/`<break>`), and it — not [text] — keys the cache so a
+     * prosody variant is stored separately. [text] stays the plain fallback form.
+     */
+    suspend fun synthesize(
+        context: Context,
+        text: String,
+        voice: String = DEFAULT_VOICE,
+        ssml: String? = null,
+    ): File {
+        val key = ssml ?: text
+        val cached = TtsCache.fileFor(context, voice, key)
         if (cached.length() > 0) {
-            Log.i(TAG, "cache hit for \"${text.take(40)}\"")
+            Log.i(TAG, "cache hit for \"${key.take(40)}\"")
             TtsCache.touch(cached) // refresh last-used time for LRU eviction
             return cached
         }
-        Log.i(TAG, "cache miss, requesting \"${text.take(40)}\"")
+        Log.i(TAG, "cache miss, requesting \"${key.take(40)}\"")
         // OkHttp read timeouts don't apply to websocket streams, and the server
         // can close without sending audio — bound the whole exchange ourselves.
-        val bytes = kotlinx.coroutines.withTimeout(15_000) { requestAudio(text, voice) }
+        val bytes = kotlinx.coroutines.withTimeout(15_000) {
+            requestAudio(ssml ?: escapeXml(text), voice)
+        }
         // Write to a temp file then atomically swap it in: a cancelled write, or
         // two workers racing the same key, can never leave a half-written MP3
         // that a later run would mistake for a valid cache hit.
@@ -67,11 +82,12 @@ object EdgeTts {
             tmp.copyTo(cached, overwrite = true)
             tmp.delete()
         }
-        Log.i(TAG, "synthesized ${bytes.size} bytes for \"${text.take(40)}\"")
+        Log.i(TAG, "synthesized ${bytes.size} bytes for \"${key.take(40)}\"")
         return cached
     }
 
-    private suspend fun requestAudio(text: String, voice: String): ByteArray =
+    /** [body] is the already-escaped SSML inner content of the `<voice>` element. */
+    private suspend fun requestAudio(body: String, voice: String): ByteArray =
         suspendCancellableCoroutine { cont ->
             val url = "wss://speech.platform.bing.com/consumer/speech/synthesize/" +
                 "readaloud/edge/v1?TrustedClientToken=$TRUSTED_CLIENT_TOKEN" +
@@ -111,7 +127,7 @@ object EdgeTts {
                             "X-Timestamp:${timestamp()}\r\n" +
                             "Path:ssml\r\n\r\n" +
                             "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' " +
-                            "xml:lang='en-US'><voice name='$voice'>${escapeXml(text)}</voice></speak>"
+                            "xml:lang='en-US'><voice name='$voice'>$body</voice></speak>"
                     )
                 }
 

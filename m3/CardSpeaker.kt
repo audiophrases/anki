@@ -56,7 +56,7 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
                 for ((i, seg) in segments.withIndex()) {
                     Log.i(TAG, "segment $i: $seg")
                     when (seg) {
-                        is Segment.Speech -> speakText(seg.text)
+                        is Segment.Speech -> speakText(seg.text, seg.ssml)
                         is Segment.Bleep -> bleep(seg.durationMs)
                         is Segment.Pause -> delay(seg.durationMs)
                     }
@@ -87,12 +87,12 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         fallbackTts.shutdown()
     }
 
-    private suspend fun speakText(text: String) {
+    private suspend fun speakText(text: String, ssml: String? = null) {
         val file: File? = try {
             // Read the chosen voice per-utterance so changing it on the start
             // screen takes effect on the next card without a restart.
             val voice = EdgeVoices.savedVoice(context)
-            withContext(Dispatchers.IO) { EdgeTts.synthesize(context, text, voice) }
+            withContext(Dispatchers.IO) { EdgeTts.synthesize(context, text, voice, ssml) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

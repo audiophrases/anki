@@ -51,20 +51,23 @@ class TtsPrefetcher(private val context: Context) {
         val s = scope ?: CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scope = it }
         for (card in cards) {
             s.launch {
-                for (text in scriptTexts(card)) {
-                    val key = "$voice|$text"
-                    if (TtsCache.fileFor(context, voice, text).length() > 0) {
+                for (seg in scriptSpeech(card)) {
+                    // Key on the SSML when present (a prosody variant is its own
+                    // cache entry) so prefetch warms exactly what playback reads.
+                    val cacheText = seg.ssml ?: seg.text
+                    val key = "$voice|$cacheText"
+                    if (TtsCache.fileFor(context, voice, cacheText).length() > 0) {
                         seen.add(key); continue
                     }
                     if (!seen.add(key)) continue // already cached this session or queued
                     gate.withLock {
                         try {
-                            EdgeTts.synthesize(context, text, voice)
+                            EdgeTts.synthesize(context, seg.text, voice, seg.ssml)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             seen.remove(key) // let a later batch (or playback) retry
-                            Log.d(TAG, "prefetch miss for \"${text.take(30)}\": ${e.message}")
+                            Log.d(TAG, "prefetch miss for \"${cacheText.take(30)}\": ${e.message}")
                         }
                     }
                 }
@@ -81,10 +84,9 @@ class TtsPrefetcher(private val context: Context) {
         seen.clear()
     }
 
-    /** Every distinct speech string the engine will play for [card] (Q then A). */
-    private fun scriptTexts(card: AnkiDroidApi.DueCard): List<String> =
+    /** Every speech segment the engine will play for [card] (Q then A). */
+    private fun scriptSpeech(card: AnkiDroidApi.DueCard): List<Segment.Speech> =
         (AudioScript.forQuestion(card.question) +
             AudioScript.forAnswer(card.answer, card.question))
             .filterIsInstance<Segment.Speech>()
-            .map { it.text }
 }
