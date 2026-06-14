@@ -48,6 +48,10 @@ object AudioScript {
     /** Words usable for restoring a blank (from lines without bullets). */
     private val CANDIDATE_WORD = Regex("""\p{L}{2,}""")
 
+    /** A field with at most this many words counts as a headword (word/phrase)
+     *  field rather than a definition — the source for inflected restores. */
+    private const val HEADWORD_MAX_WORDS = 5
+
     private const val LINE_PAUSE_MS = 400L
 
     fun forQuestion(questionText: String): List<Segment> = render(questionText)
@@ -185,6 +189,15 @@ object AudioScript {
             .flatMap { CANDIDATE_WORD.findAll(it).map { m -> m.value } }
             .distinct()
 
+        // Headword candidates: words from short fields only (the word / phrase
+        // field, never a long definition sentence). Inflected restores draw from
+        // these, so the example's conjugated headword ("hone" → "h•••d" honed) is
+        // restored, while a definition word ("etc") can't become "etcs".
+        val lemmas = lines.filterNot { it.contains('•') }
+            .filter { CANDIDATE_WORD.findAll(it).count() in 1..HEADWORD_MAX_WORDS }
+            .flatMap { CANDIDATE_WORD.findAll(it).map { m -> m.value } }
+            .distinct()
+
         val out = mutableListOf<Segment>()
         var hintFieldPhrase: String? = null
         val unrestoredInline = mutableListOf<String>()
@@ -203,7 +216,7 @@ object AudioScript {
                 // Recognition (restorable) → stay silent; production → keep
                 // the detailed letter hint for the end of the script.
                 if (hintFieldPhrase == null &&
-                    restore(tokens.first().value, candidates) == null
+                    restore(tokens.first().value, candidates, lemmas) == null
                 ) {
                     hintFieldPhrase = tokens.joinToString(", then a ") { hintPhrase(it.value) }
                 }
@@ -213,7 +226,7 @@ object AudioScript {
             // Example sentence: recognition words drop back in restored;
             // production words become the codeword so the sentence flows.
             val tokenValues = tokens.map { it.value }
-            val restored = restoreInline(tokenValues, candidates, line)
+            val restored = restoreInline(tokenValues, candidates, lemmas, line)
             var idx = -1
             var hasBlank = false
             val rendered = line.replace(BLANK_TOKEN) {
@@ -277,13 +290,21 @@ object AudioScript {
      *     enough to place even a fully-hidden blank like "•••" in "get in").
      * Otherwise each token keeps its independent result (null → codeword).
      */
-    private fun restoreInline(tokens: List<String>, candidates: List<String>, line: String): List<String?> {
-        val perToken = tokens.map { restore(it, candidates) }
+    private fun restoreInline(
+        tokens: List<String>,
+        candidates: List<String>,
+        lemmas: List<String>,
+        line: String,
+    ): List<String?> {
+        val perToken = tokens.map { restore(it, candidates, lemmas) }
         if (candidates.isEmpty() || tokens.size > candidates.size) return perToken
         if (perToken.none { it == null }) return perToken
 
         val assigned = alignToPhrase(tokens, candidates) ?: return perToken
-        val slot = tokens.mapIndexed { i, t -> restore(t, listOf(candidates[assigned[i]])) }
+        val slot = tokens.mapIndexed { i, t ->
+            val one = listOf(candidates[assigned[i]])
+            restore(t, one, one)
+        }
 
         val consistent = perToken.indices.all { i -> perToken[i] == null || perToken[i] == slot[i] }
         if (!consistent) return perToken
@@ -393,11 +414,11 @@ object AudioScript {
      *  - whole word, letters at fixed spots:  "m••e" / "f••b••••••e" → match in place
      *  - stem + inflectional ending:          "wh•••••d" + "wheedle" → "wheedled"
      */
-    private fun restore(token: String, candidates: List<String>): String? {
+    private fun restore(token: String, candidates: List<String>, lemmas: List<String>): String? {
         val b = parseBlank(token)
         if (b.knowns.isEmpty()) return null   // nothing but bullets — unrecoverable
 
-        // A whole-word match must be UNAMBIGUOUS. A weakly-revealed blank like
+        // (1) A whole-word match must be UNAMBIGUOUS. A weakly-revealed blank like
         // "w••••" (only the first letter shown) fits many words: on a production
         // card its only visible "matches" come from the *definition* ("woven",
         // "woman"), never the hidden answer "weave". If more than one distinct
@@ -407,18 +428,23 @@ object AudioScript {
         val fits = candidates.filter { b.matches(it) }
         if (fits.isNotEmpty() && fits.distinctBy { it.lowercase() }.size == 1) return fits.first()
 
-        // Stem + inflectional ending ("wh•••••d" + "wheedle" → "wheedled"). Needs a
-        // real (>=2 letter) stem prefix and a single fitting candidate: a lone
-        // revealed letter like the "e" of "e••s" otherwise lets the definition's
-        // "etc" pose as the stem → "etcs" (which the voice reads as "ex").
-        if (b.prefix.length >= 2 && b.suffix.isNotEmpty()) {
-            val stems = candidates.filter { b.matchesStem(it) }
-            if (stems.distinctBy { it.lowercase() }.size == 1) return stems.first() + b.suffix
+        // (2) The example conjugates the headword. Inflect the LEMMA fields only
+        // (the word/phrase field, never definition prose) with the regular English
+        // spelling changes, and accept a unique form that fits the blank exactly.
+        // Restores "hone" → "h•••d" (honed) and "hone" → "h••ing" (honing — silent
+        // e dropped); the definition's "etc" is never a lemma, so it can't become
+        // "etcs". Drawing from the headword is also what makes this safe: on a
+        // production card the headword is hidden, so there are no lemmas and the
+        // blank stays the spoken codeword.
+        run {
+            val inflected = lemmas.flatMap { inflectedForms(it) }.filter { b.matches(it) }
+            if (inflected.distinctBy { it.lowercase() }.size == 1) return inflected.first()
         }
 
-        // Shown stem and ending around a hidden middle, length within one.
+        // (3) Shown stem and ending around a hidden middle (e.g. "f••b••••••e"),
+        // among the headword lemmas, length within one.
         if (b.prefix.length >= 2) {
-            val fuzzy = candidates.filter {
+            val fuzzy = lemmas.filter {
                 it.startsWith(b.prefix, ignoreCase = true) &&
                     it.endsWith(b.suffix, ignoreCase = true) &&
                     kotlin.math.abs(it.length - b.length) <= 1
@@ -426,6 +452,33 @@ object AudioScript {
             if (fuzzy.distinctBy { it.lowercase() }.size == 1) return fuzzy.first()
         }
         return null
+    }
+
+    /** Inflectional endings tried on a headword to match an example's conjugation. */
+    private val INFLECTION_ENDINGS = listOf("s", "es", "d", "ed", "ing", "ies", "ied", "er", "est")
+
+    /**
+     * Every regular inflected spelling of [lemma]: each ending in
+     * [INFLECTION_ENDINGS] applied plain ("walk"→"walking"), with a dropped silent
+     * final e ("hone"→"honing", "proscribe"→"proscribed"), with a doubled final
+     * consonant ("run"→"running"), and with y→i ("carry"→"carried"). Generated
+     * from a fixed ending set rather than the blank's revealed tail, because that
+     * tail can include stem letters ("••••••ibed" shows the "ib" of proscribe, not
+     * just the "-d"). Over-generates on purpose — the caller keeps only a form that
+     * exactly fits the blank.
+     */
+    private fun inflectedForms(lemma: String): List<String> {
+        val dropE = if (lemma.endsWith("e", ignoreCase = true)) lemma.dropLast(1) else null
+        val yToI = if (lemma.length >= 2 && lemma.endsWith("y", ignoreCase = true)) lemma.dropLast(1) + "i" else null
+        val doubled = if (lemma.length >= 3) lemma + lemma.last() else null
+        val forms = mutableListOf<String>()
+        for (e in INFLECTION_ENDINGS) {
+            forms += lemma + e
+            dropE?.let { forms += it + e }
+            yToI?.let { forms += it + e }
+            doubled?.let { forms += it + e }
+        }
+        return forms.distinct()
     }
 
     /** "m••e" → "4 letter word starting with M and ending with E". */
