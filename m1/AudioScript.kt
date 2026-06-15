@@ -300,7 +300,10 @@ object AudioScript {
         if (candidates.isEmpty() || tokens.size > candidates.size) return perToken
         if (perToken.none { it == null }) return perToken
 
-        val assigned = alignToPhrase(tokens, candidates) ?: return perToken
+        // Exact length first; if that fails, allow a 1-off slip (decks sometimes
+        // mis-count bullets, e.g. "no •••••, no ••••" for the 4-letter "harm").
+        val assigned = (alignToPhrase(tokens, candidates, 0)
+            ?: alignToPhrase(tokens, candidates, 1)) ?: return perToken
         val slot = tokens.mapIndexed { i, t ->
             val one = listOf(candidates[assigned[i]])
             restore(t, one, one)
@@ -334,13 +337,14 @@ object AudioScript {
     }
 
     /** Greedily maps each blank, left to right, to the next candidate word it
-     *  could be ([blankFitsWord]); null if any blank has no fitting word. */
-    private fun alignToPhrase(tokens: List<String>, candidates: List<String>): List<Int>? {
+     *  could be ([blankFitsWord], within [lenTolerance] letters); null if any
+     *  blank has no fitting word. */
+    private fun alignToPhrase(tokens: List<String>, candidates: List<String>, lenTolerance: Int): List<Int>? {
         val out = ArrayList<Int>(tokens.size)
         var next = 0
         for (t in tokens) {
             var j = next
-            while (j < candidates.size && !blankFitsWord(t, candidates[j])) j++
+            while (j < candidates.size && !blankFitsWord(t, candidates[j], lenTolerance)) j++
             if (j >= candidates.size) return null
             out += j
             next = j + 1
@@ -359,9 +363,9 @@ object AudioScript {
      * confirm a positional fill. A fully hidden blank must match the word's
      * length exactly; otherwise the shown stem and/or ending must agree.
      */
-    private fun blankFitsWord(token: String, word: String): Boolean {
+    private fun blankFitsWord(token: String, word: String, lenTolerance: Int = 0): Boolean {
         val b = parseBlank(token)
-        if (b.knowns.isEmpty()) return word.length == b.length
+        if (b.knowns.isEmpty()) return kotlin.math.abs(word.length - b.length) <= lenTolerance
         if (b.matches(word) || b.matchesStem(word)) return true
         if (b.prefix.isNotEmpty() && !word.startsWith(b.prefix, ignoreCase = true)) return false
         if (b.suffix.isNotEmpty() && !word.endsWith(b.suffix, ignoreCase = true)) return false
