@@ -200,7 +200,13 @@ object AudioScript {
 
         val out = mutableListOf<Segment>()
         var hintFieldPhrase: String? = null
-        val unrestoredInline = mutableListOf<String>()
+        // Unrestored blanks of the most recent blanked line. The note's hint field
+        // (e.g. "be •• •• something") is the last such line and carries exactly one
+        // blank per word to produce — so its blanks, in order, give the right
+        // letter hint ("2 letter word, then a 2 letter word") where accumulating
+        // every line's blanks would double-count and a dedupe would wrongly merge
+        // two distinct same-length words (in / on).
+        var lastBlankedLine: List<String> = emptyList()
 
         for (line in lines) {
             val tokens = BLANK_TOKEN.findAll(line).toList()
@@ -228,32 +234,28 @@ object AudioScript {
             val tokenValues = tokens.map { it.value }
             val restored = restoreInline(tokenValues, candidates, lemmas, line)
             var idx = -1
-            var hasBlank = false
+            val lineBlanks = mutableListOf<String>()
             val rendered = line.replace(BLANK_TOKEN) {
                 idx++
                 restored[idx] ?: run {
-                    unrestoredInline += tokenValues[idx]
-                    hasBlank = true
+                    lineBlanks += tokenValues[idx]
                     "$MARK_OPEN$CODEWORD$MARK_CLOSE"
                 }
             }
             val expanded = expandAbbreviations(rendered)
-            if (hasBlank) {
+            if (lineBlanks.isNotEmpty()) {
                 out += blankEmphasised(expanded)
+                lastBlankedLine = lineBlanks
             } else {
                 out += Segment.Speech(expanded)
             }
             out += Segment.Pause(LINE_PAUSE_MS)
         }
 
-        // Production: speak the letter hint once, after the sentence —
-        // from the hint field, or derived from the blanks themselves when
-        // the note has no hint field.
-        // Dedupe on the spoken phrase, not the raw token: the same blank can
-        // appear twice with different trailing punctuation ("w••••?" vs "w••••")
-        // yet should be hinted once ("5 letter word starting with W").
+        // Production: speak the letter hint after the sentence — from a dedicated
+        // (blanks-only) hint field, else from the last blanked line's blanks.
         val hint = hintFieldPhrase
-            ?: unrestoredInline.map { hintPhrase(it) }.distinct().takeIf { it.isNotEmpty() }
+            ?: lastBlankedLine.map { hintPhrase(it) }.takeIf { it.isNotEmpty() }
                 ?.joinToString(", then a ")
         if (hint != null) {
             out += Segment.Speech(hint)
