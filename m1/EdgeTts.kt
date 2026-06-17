@@ -41,6 +41,29 @@ object EdgeTts {
     private const val CHROMIUM_MAJOR = "143"
     private const val OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3"
 
+    // --- Playback lead-in -----------------------------------------------------
+    // Android's audio output goes idle between clips (the phone speaker, and far
+    // more so a Bluetooth/car link), and the first couple hundred ms after it
+    // wakes is swallowed by the route warming up. On a short standalone utterance
+    // that lost slice is a whole unstressed syllable — "upheaval" is heard as
+    // "heaval". Edge bakes only ~130 ms of head silence into a clip, not enough,
+    // so we prepend our own silence: the warm-up eats silence instead of speech.
+    //
+    // The lead-in is a run of MPEG-2 Layer III silent frames matching
+    // OUTPUT_FORMAT exactly (24 kHz / 48 kbit/s / mono) so they concatenate
+    // cleanly in front of the Edge stream. One frame = a 4-byte header
+    // (FF F3 64 C4 — the same header Edge emits) + 140 zero data bytes = 576
+    // samples = 24 ms; an all-zero Layer III frame (part2_3_length 0) decodes to
+    // pure silence. If OUTPUT_FORMAT ever changes, this frame header must too.
+    private const val LEAD_IN_MS = 280
+    private const val MP3_FRAME_MS = 24 // 576 samples at 24 kHz
+    private val SILENT_FRAME =
+        byteArrayOf(0xFF.toByte(), 0xF3.toByte(), 0x64.toByte(), 0xC4.toByte()) + ByteArray(140)
+    private val leadInSilence: ByteArray = run {
+        val frames = (LEAD_IN_MS + MP3_FRAME_MS - 1) / MP3_FRAME_MS // ceil
+        ByteArray(frames * SILENT_FRAME.size) { SILENT_FRAME[it % SILENT_FRAME.size] }
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -75,9 +98,11 @@ object EdgeTts {
         }
         // Write to a temp file then atomically swap it in: a cancelled write, or
         // two workers racing the same key, can never leave a half-written MP3
-        // that a later run would mistake for a valid cache hit.
+        // that a later run would mistake for a valid cache hit. A silent lead-in
+        // is baked in here (the single synthesis chokepoint, so prefetch and
+        // on-demand both get it) to absorb the device's audio-route warm-up.
         val tmp = File(cached.parentFile, "${cached.name}.${UUID.randomUUID()}.tmp")
-        tmp.writeBytes(bytes)
+        tmp.writeBytes(leadInSilence + bytes)
         if (!tmp.renameTo(cached)) {
             tmp.copyTo(cached, overwrite = true)
             tmp.delete()

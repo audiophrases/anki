@@ -125,6 +125,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.testVoiceButton).setOnClickListener {
             speaker.speak(listOf(Segment.Speech("This is the voice you will hear while studying.")))
         }
+        findViewById<Button>(R.id.seedButton).setOnClickListener {
+            lifecycleScope.launch {
+                val msg = withContext(Dispatchers.IO) {
+                    runCatching { AnkiDroidApi.seedTestDeck(this@MainActivity) }
+                        .getOrElse { "Seed failed: ${it.message}" }
+                }
+                populateDecks() // refresh the spinner so the new deck shows up
+                status(msg)     // show the result last (populateDecks sets its own status)
+                android.util.Log.i("SeedTestDeck", msg)
+            }
+        }
         findViewById<Button>(R.id.replayButton).setOnClickListener { engine.replayQuestion() }
         findViewById<Button>(R.id.showButton).setOnClickListener {
             lifecycleScope.launch { engine.reveal() }

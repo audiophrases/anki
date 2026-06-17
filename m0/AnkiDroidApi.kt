@@ -244,6 +244,98 @@ object AnkiDroidApi {
         return card.copy(question = q, answer = a)
     }
 
+    // ---- test-deck seeding (dev only) ----
+
+    /** The note type (model) id backing a note. */
+    private fun noteModelId(context: Context, noteId: Long): Long {
+        val uri = Uri.parse("content://$AUTHORITY/notes/$noteId")
+        context.contentResolver.query(uri, arrayOf("mid"), null, null, null)?.use { c ->
+            if (c.moveToFirst()) return c.getLong(0)
+        }
+        return -1L
+    }
+
+    /** Creates a deck by [name] (returns the existing one's id if already there). */
+    private fun createDeck(context: Context, name: String): Long? {
+        deckIdByName(context, name)?.let { return it }
+        val values = ContentValues().apply { put("deck_name", name) }
+        val uri = context.contentResolver.insert(Uri.parse("content://$AUTHORITY/decks"), values)
+        return uri?.lastPathSegment?.toLongOrNull() ?: deckIdByName(context, name)
+    }
+
+    /** Adds a note ([modelId], [fields]) and moves its generated cards to [deckId]. */
+    private fun addNote(context: Context, modelId: Long, deckId: Long, fields: List<String>): Long? {
+        val values = ContentValues().apply {
+            put("mid", modelId)
+            put("flds", fields.joinToString(FIELD_SEPARATOR))
+            put("tags", "ankiaudio-test")
+        }
+        val noteUri = context.contentResolver
+            .insert(Uri.parse("content://$AUTHORITY/notes"), values) ?: return null
+        val noteId = noteUri.lastPathSegment?.toLongOrNull() ?: return null
+        val cardsUri = Uri.parse("content://$AUTHORITY/notes/$noteId/cards")
+        context.contentResolver.query(cardsUri, null, null, null, null)?.use { c ->
+            val ordIdx = c.getColumnIndexOrThrow("ord")
+            while (c.moveToNext()) {
+                val ord = c.getInt(ordIdx)
+                val cv = ContentValues().apply { put("deck_id", deckId) }
+                context.contentResolver.update(
+                    Uri.parse("content://$AUTHORITY/notes/$noteId/cards/$ord"), cv, null, null
+                )
+            }
+        }
+        return noteId
+    }
+
+    /**
+     * Builds a throwaway **AnkiAudio Test** deck (using English::Main's note type,
+     * so the cards render the same way) seeded with the tricky words we debug
+     * against — so testing never reschedules a real card. All notes are tagged
+     * `ankiaudio-test`; delete the deck (or `tag:ankiaudio-test`) to reset.
+     */
+    fun seedTestDeck(context: Context, deckName: String = "AnkiAudio Test"): String {
+        if (deckIdByName(context, deckName) != null) {
+            return "'$deckName' already exists — delete it in AnkiDroid to re-seed."
+        }
+        val allDecks = decks(context)
+        val main = allDecks.firstOrNull { it.name.equals("English::Main", ignoreCase = true) }
+            ?: allDecks.firstOrNull { it.name.contains("English", ignoreCase = true) }
+            ?: return "English deck not found. Decks: " + allDecks.joinToString { it.name }
+        val sample = nextDueCards(context, main.id, 1).firstOrNull()
+            ?: return "No card available in ${main.name} to copy the note type from."
+        val mid = noteModelId(context, sample.noteId)
+        if (mid <= 0) return "Couldn't read the English::Main note type."
+        val fieldCount = modelFieldNames(context, mid)?.size ?: 4
+        val deckId = createDeck(context, deckName) ?: return "Failed to create '$deckName'."
+
+        val dot = 8226.toChar().toString() // U+2022 bullet, built from code to dodge mangling
+        fun b(n: Int) = dot.repeat(n)
+        val notes = listOf(
+            listOf("stance", "an opinion that is stated publicly",
+                "What is your st${b(4)} on environmental issues?", "st${b(4)}"),
+            listOf("hone", "sharpen",
+                "The bone had been h${b(3)}d to a point.", "h${b(3)}"),
+            listOf("proscribe", "prohibit, forbid",
+                "The king ${b(6)}ibed the worship of idols in his kingdom.", "${b(6)}ibe"),
+            listOf("be in on something", "be part of a plan",
+                "Susan was the only one who wasn't ${b(2)} ${b(2)} the plan.", "be ${b(2)} ${b(2)} something"),
+            listOf("No harm, no foul!", "no one was hurt, so there is no problem",
+                "He parked in my space but I was away at the time: no ${b(5)}, no ${b(4)}.", "no ${b(5)}, no ${b(4)}"),
+            listOf("with my eyes open", "knowing fully what the difficulties of a situation might be",
+                "I went into this deal with my e${b(2)}s o${b(3)}.", "with my e${b(2)}s o${b(3)}"),
+            listOf("hair weave", "false hair woven into a woman's own hair so it looks natural",
+                "Is that a w${b(4)}? It looks too real to be a w${b(4)}.", "hair w${b(4)}"),
+            listOf("pencil pusher", "a clerk with a boring job",
+                "", "p${b(5)} p${b(5)}"),
+        )
+        var added = 0
+        for (f in notes) {
+            val padded = (f + List(maxOf(0, fieldCount - f.size)) { "" }).take(fieldCount)
+            if (runCatching { addNote(context, mid, deckId, padded) }.getOrNull() != null) added++
+        }
+        return "Created '$deckName' with $added/${notes.size} notes."
+    }
+
     private fun stripHtml(html: String): String {
         // fromHtml() would render <style>/<script> contents as visible text.
         val cleaned = html

@@ -53,6 +53,19 @@
             android:textColor="#FFFFFF"
             android:textSize="15sp" />
 
+        <Button
+            android:id="@+id/seedButton"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginBottom="8dp"
+            android:backgroundTint="#9E9E9E"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🧪  Seed test deck"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+
         <TextView
             android:id="@+id/statusView"
             android:layout_width="match_parent"

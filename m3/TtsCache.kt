@@ -20,6 +20,15 @@ object TtsCache {
     private const val TAG = "TtsCache"
     private const val DIR = "tts"
 
+    /**
+     * Bumped whenever the bytes we synthesize for a given (voice, text) change in
+     * a way the old cache can't represent — currently: v2 added a silent playback
+     * lead-in (see [EdgeTts]). Folding it into the key sidesteps every pre-fix
+     * entry so studied cards regenerate with the lead-in instead of replaying the
+     * clipped audio; the orphans age out via [trim].
+     */
+    private const val CACHE_VERSION = "v2"
+
     /** Hard ceiling; once the cache passes it the sweep trims back to [TARGET_BYTES]. */
     private const val MAX_BYTES = 80L * 1024 * 1024    // ~80 MB
     private const val TARGET_BYTES = 50L * 1024 * 1024 // trim down to ~50 MB
@@ -44,7 +53,7 @@ object TtsCache {
     }
 
     private fun key(voice: String, text: String): String =
-        sha256Hex("$voice|$text").take(40) + ".mp3"
+        sha256Hex("$CACHE_VERSION|$voice|$text").take(40) + ".mp3"
 
     /**
      * Drops stale entries and, if the cache is still over budget, the
