@@ -39,6 +39,10 @@ object AnkiDroidApi {
         val buttonCount: Int,
         val question: String,
         val answer: String,
+        /** The note's first field — the word/phrase being studied. Lets the audio
+         *  renderer KNOW the card direction (the word is shown on the recognition
+         *  side, hidden on production) instead of guessing from the blanks. */
+        val word: String = "",
     )
 
     /**
@@ -113,7 +117,7 @@ object AnkiDroidApi {
                 val noteId = c.getLong(noteIdx)
                 val ord = c.getInt(ordIdx)
                 val (q, a) = cardText(context, noteId, ord)
-                out += DueCard(noteId, ord, c.getInt(buttonIdx), q, a)
+                out += DueCard(noteId, ord, c.getInt(buttonIdx), q, a, studiedWord(context, noteId))
             }
         }
         return out
@@ -135,6 +139,19 @@ object AnkiDroidApi {
             }
         }
         return "" to ""
+    }
+
+    /** The note's first field (the studied word/phrase), HTML stripped. */
+    private fun studiedWord(context: Context, noteId: Long): String {
+        val uri = Uri.parse("content://$AUTHORITY/notes/$noteId")
+        context.contentResolver.query(uri, arrayOf("flds"), null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val flds = c.getString(0) ?: return ""
+                val first = flds.split(FIELD_SEPARATOR).firstOrNull() ?: return ""
+                return stripHtml(first)
+            }
+        }
+        return ""
     }
 
     /**

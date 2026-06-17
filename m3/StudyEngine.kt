@@ -144,8 +144,8 @@ class StudyEngine(
             runCatching { AnkiDroidApi.reloadCard(context, card) }.getOrNull()
         } ?: return
         current = refreshed
-        questionScript = AudioScript.forQuestion(refreshed.question)
-        answerScript = AudioScript.forAnswer(refreshed.answer, refreshed.question)
+        questionScript = AudioScript.forQuestion(refreshed.question, refreshed.word)
+        answerScript = AudioScript.forAnswer(refreshed.answer, refreshed.question, refreshed.word)
         onState(if (answerShown) "Answer (edited)" else "Question (edited)")
         Log.i(TAG, "reloaded edited note=${refreshed.noteId}")
     }
@@ -162,8 +162,8 @@ class StudyEngine(
         current = p.card
         answerShown = false
         shownAt = SystemClock.elapsedRealtime()
-        questionScript = AudioScript.forQuestion(p.card.question)
-        answerScript = AudioScript.forAnswer(p.card.answer, p.card.question)
+        questionScript = AudioScript.forQuestion(p.card.question, p.card.word)
+        answerScript = AudioScript.forAnswer(p.card.answer, p.card.question, p.card.word)
         speaker.speak(
             listOf(Segment.Speech("Undone."), Segment.Pause(300)) + questionScript
         )
@@ -206,8 +206,8 @@ class StudyEngine(
         }
 
         shownAt = SystemClock.elapsedRealtime()
-        questionScript = AudioScript.forQuestion(next.question)
-        answerScript = AudioScript.forAnswer(next.answer, next.question)
+        questionScript = AudioScript.forQuestion(next.question, next.word)
+        answerScript = AudioScript.forAnswer(next.answer, next.question, next.word)
         val script = buildList {
             if (confirm != null) {
                 add(Segment.Speech(confirm))

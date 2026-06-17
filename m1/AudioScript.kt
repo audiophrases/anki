@@ -54,7 +54,24 @@ object AudioScript {
 
     private const val LINE_PAUSE_MS = 400L
 
-    fun forQuestion(questionText: String): List<Segment> = render(questionText)
+    fun forQuestion(questionText: String, word: String = ""): List<Segment> =
+        render(questionText, isProduction(questionText, word))
+
+    /**
+     * Whether this is a PRODUCTION card (learner must supply the word) — known,
+     * not guessed. The studied [word] (the note's first field) is shown on the
+     * recognition side and hidden on production, so its absence from the rendered
+     * [question] means production. An empty [word] (unknown) falls back to the old
+     * restore-from-visible-words behaviour, i.e. treated as recognition.
+     */
+    private fun isProduction(question: String, word: String): Boolean {
+        if (word.isBlank()) return false
+        // Newlines must separate words here (normalize() drops them), or the word
+        // line "stance" would fuse with the next line ("stanceWhat…") and never match.
+        val q = " " + normalize(question.replace('\n', ' ')) + " "
+        val w = " " + normalize(word.replace('\n', ' ')) + " "
+        return !q.contains(w)
+    }
 
     /**
      * The answer side often repeats question content (word, example,
@@ -67,16 +84,17 @@ object AudioScript {
      * again — half-restored, plus a leftover letter hint — wastes the
      * driver's time; replaying the question is one swipe/word away.
      */
-    fun forAnswer(answerText: String, questionText: String = ""): List<Segment> {
-        if (questionText.isEmpty()) return render(answerText)
+    fun forAnswer(answerText: String, questionText: String = "", word: String = ""): List<Segment> {
+        val production = isProduction(questionText, word)
+        if (questionText.isEmpty()) return render(answerText, production)
 
         val seen = questionText.lines().mapTo(HashSet()) { normalize(it) }
         val fresh = answerText.lines()
             .filter { it.isNotBlank() && normalize(it) !in seen }
-        val segments = render(fresh.joinToString("\n"))
+        val segments = render(fresh.joinToString("\n"), production)
 
         // If everything was redundant, better to repeat than to stay silent.
-        return if (segments.any { it is Segment.Speech }) segments else render(answerText)
+        return if (segments.any { it is Segment.Speech }) segments else render(answerText, production)
     }
 
     private fun normalize(s: String): String = s.lowercase()
@@ -181,7 +199,7 @@ object AudioScript {
         return BARE_TAGS.fold(dotted) { acc, (regex, word) -> regex.replace(acc, word) }
     }
 
-    private fun render(text: String): List<Segment> {
+    private fun render(text: String, production: Boolean): List<Segment> {
         val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
 
         // Candidate words that might be the hidden word, visible on this side.
@@ -219,20 +237,21 @@ object AudioScript {
             val withoutTokens = line.replace(BLANK_TOKEN, "")
             if (withoutTokens.none { it.isLetterOrDigit() }) {
                 // Dedicated hint field (e.g. "wh•••••" or "c•t c•••••s").
-                // Recognition (restorable) → stay silent; production → keep
-                // the detailed letter hint for the end of the script.
-                if (hintFieldPhrase == null &&
-                    restore(tokens.first().value, candidates, lemmas) == null
-                ) {
+                // Production → keep the detailed letter hint; recognition → stay
+                // silent (the word is shown, so the field is redundant).
+                if (production && hintFieldPhrase == null) {
                     hintFieldPhrase = tokens.joinToString(", then a ") { hintPhrase(it.value) }
                 }
                 continue
             }
 
-            // Example sentence: recognition words drop back in restored;
-            // production words become the codeword so the sentence flows.
+            // Example sentence: on recognition the visible word drops back into the
+            // blanks; on production the word is hidden, so every blank becomes the
+            // spoken codeword (never a look-alike like the definition's "stated").
             val tokenValues = tokens.map { it.value }
-            val restored = restoreInline(tokenValues, candidates, lemmas, line)
+            val restored: List<String?> =
+                if (production) List(tokenValues.size) { null }
+                else restoreInline(tokenValues, candidates, lemmas, line)
             var idx = -1
             val lineBlanks = mutableListOf<String>()
             val rendered = line.replace(BLANK_TOKEN) {

@@ -86,7 +86,7 @@ class TtsPrefetcher(private val context: Context) {
 
     /** Every speech segment the engine will play for [card] (Q then A). */
     private fun scriptSpeech(card: AnkiDroidApi.DueCard): List<Segment.Speech> =
-        (AudioScript.forQuestion(card.question) +
-            AudioScript.forAnswer(card.answer, card.question))
+        (AudioScript.forQuestion(card.question, card.word) +
+            AudioScript.forAnswer(card.answer, card.question, card.word))
             .filterIsInstance<Segment.Speech>()
 }
