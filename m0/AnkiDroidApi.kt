@@ -327,6 +327,13 @@ object AnkiDroidApi {
                 "Is that a w${b(4)}? It looks too real to be a w${b(4)}.", "hair w${b(4)}"),
             listOf("pencil pusher", "a clerk with a boring job",
                 "", "p${b(5)} p${b(5)}"),
+            // Recitation card: field 1 is the whole sentence; the other fields are
+            // progressively-masked copies. The fully-masked level should collapse
+            // to a "Recite the line" prompt, not a per-word spelling bee.
+            listOf("Looks good on paper but so does communism.",
+                "Looks good on p${b(4)} but ${b(2)} ${b(4)} com${b(6)}.",
+                "L${b(4)} g${b(3)} ${b(2)} p${b(4)} ${b(3)} ${b(2)} d${b(3)} c${b(7)}m.",
+                "L${b(4)} g${b(3)} ${b(2)} p${b(4)} ${b(3)} ${b(2)} d${b(3)} c${b(7)}m."),
         )
         var added = 0
         for (f in notes) {

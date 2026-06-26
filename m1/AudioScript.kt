@@ -36,6 +36,16 @@ sealed interface Segment {
  * like "wh•••••") is skipped when a blank was already rendered inline in an
  * earlier line; otherwise it is spoken as a standalone hint.
  *
+ * **Recitation cards** (a whole sentence/quote with most or all of its words
+ * masked, e.g. the progressively-blanked "Looks good on p•••• but •• ••••
+ * com•••••••.") are a different shape: there is no natural sentence to keep
+ * flowing and no single word to hint. Reading every word as "blank", or
+ * spelling out a dozen letter hints in one breath, is noise by ear — and the
+ * fully-masked line would otherwise be misread as one giant dedicated hint
+ * field. So on the recall (production) side such a line collapses to a short
+ * "Recite the line" prompt (seeded with the first shown letter); the full
+ * sentence is read back on reveal from the unblanked field.
+ *
  * Dictionary tags common in the deck ("v.", "inf.", "esp") are expanded to
  * full words ("verb", "informal", "especially") so the voice reads them
  * naturally instead of guessing at the abbreviation.
@@ -96,6 +106,10 @@ object AudioScript {
         // If everything was redundant, better to repeat than to stay silent.
         return if (segments.any { it is Segment.Speech }) segments else render(answerText, production)
     }
+
+    /** Drops each line equal (ignoring case) to the line immediately before it. */
+    private fun dropAdjacentDuplicates(lines: List<String>): List<String> =
+        lines.filterIndexed { i, l -> i == 0 || !l.equals(lines[i - 1], ignoreCase = true) }
 
     private fun normalize(s: String): String = s.lowercase()
         .filter { it.isLetterOrDigit() || it == ' ' }
@@ -200,7 +214,10 @@ object AudioScript {
     }
 
     private fun render(text: String, production: Boolean): List<Segment> {
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        // Collapse a line that exactly repeats the one before it — a headword
+        // field entered on two lines ("dash\ndash") would otherwise be read
+        // "dash. dash."; hearing the same line twice in a row helps nobody.
+        val lines = dropAdjacentDuplicates(text.lines().map { it.trim() }.filter { it.isNotEmpty() })
 
         // Candidate words that might be the hidden word, visible on this side.
         val candidates = lines.filterNot { it.contains('•') }
@@ -225,6 +242,9 @@ object AudioScript {
         // every line's blanks would double-count and a dedupe would wrongly merge
         // two distinct same-length words (in / on).
         var lastBlankedLine: List<String> = emptyList()
+        // A recite prompt is spoken at most once per side, even if several
+        // masked recitation lines (e.g. easy + hard blank levels) are stacked.
+        var recitePrompted = false
 
         for (line in lines) {
             val tokens = BLANK_TOKEN.findAll(line).toList()
@@ -235,12 +255,31 @@ object AudioScript {
             }
 
             val withoutTokens = line.replace(BLANK_TOKEN, "")
-            if (withoutTokens.none { it.isLetterOrDigit() }) {
-                // Dedicated hint field (e.g. "wh•••••" or "c•t c•••••s").
+            if (withoutTokens.none { it.isLetterOrDigit() } && tokens.size <= HEADWORD_MAX_WORDS) {
+                // Dedicated hint field (e.g. "wh•••••" or "p••••• p•••••"): a
+                // headword/short phrase with no visible words. A *longer* run of
+                // bullet-words is a masked sentence, not a hint — it falls through.
                 // Production → keep the detailed letter hint; recognition → stay
                 // silent (the word is shown, so the field is redundant).
                 if (production && hintFieldPhrase == null) {
                     hintFieldPhrase = tokens.joinToString(", then a ") { hintPhrase(it.value) }
+                }
+                continue
+            }
+
+            // Recitation line: a whole sentence with most/all of its words masked
+            // (more blanks than visible words, too long to be a headword phrase).
+            // On the recall side there is nothing useful to read word-by-word, so
+            // just prompt — the unblanked field carries the answer on reveal. On
+            // recognition the sentence is visible on this side, so fall through and
+            // let it restore and read naturally.
+            if (production && tokens.size > HEADWORD_MAX_WORDS &&
+                tokens.size > visibleWords(line).size
+            ) {
+                if (!recitePrompted) {
+                    out += Segment.Speech(recitePrompt(tokens.first().value))
+                    out += Segment.Pause(LINE_PAUSE_MS)
+                    recitePrompted = true
                 }
                 continue
             }
@@ -504,6 +543,18 @@ object AudioScript {
             doubled?.let { forms += it + e }
         }
         return forms.distinct()
+    }
+
+    /**
+     * Prompt for a fully-masked recitation line, seeded with the first shown
+     * letter when there is one ("Recite the line, starting with L."). The seed
+     * is taken from the first blank's visible prefix only — never the answer —
+     * so it stays a cue, not a give-away.
+     */
+    private fun recitePrompt(firstToken: String): String {
+        val prefix = parseBlank(firstToken).prefix
+        return if (prefix.isNotEmpty()) "Recite the line, starting with ${spell(prefix)}."
+        else "Recite the line."
     }
 
     /** "m••e" → "4 letter word starting with M and ending with E". */
