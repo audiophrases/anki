@@ -45,3 +45,16 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 }
+
+// Build the debug APK and copy it (stable name) into <repo-root>/dist so it can be
+// committed. That lets a machine with NO Android toolchain `git pull` and install it
+// straight onto a phone — see ../../BUILD.md. Run on the build machine after code
+// changes:  ./gradlew exportDebugApk   then commit dist/ankiaudio-debug.apk.
+tasks.register<Copy>("exportDebugApk") {
+    group = "distribution"
+    description = "Build the debug APK and copy it to <repo>/dist/ankiaudio-debug.apk for committing."
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    into(File(rootProject.projectDir.parentFile, "dist"))
+    rename { "ankiaudio-debug.apk" }
+}
