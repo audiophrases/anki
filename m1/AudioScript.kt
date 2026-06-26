@@ -206,18 +206,50 @@ object AudioScript {
         Regex("""\bBrE\b""") to "British English",
     )
 
+    /**
+     * Learner-dictionary placeholders that pervade the main deck's headwords and
+     * definitions ("mow sb down", "heed sb's warning", "praise sth"): spoken
+     * literally the voice says "ess-bee"/"ess-tee-aitch". "sth"/"sb" expand
+     * regardless of case (also sentence-initial "Sth …"); "bc" only in lower
+     * case, so "44 BC" (a date) is left alone.
+     */
+    private val PLACEHOLDER_TAGS = listOf(
+        Regex("""\bsth\b""", RegexOption.IGNORE_CASE) to "something",
+        Regex("""\bsb\b""", RegexOption.IGNORE_CASE) to "somebody",
+        Regex("""\bbc\b""") to "because",
+    )
+
+    /** A slash between two letters joins alternatives ("be/fall behind",
+     *  "mosque/shrine") — read it as "or". Restricted to letters so number
+     *  slashes (a date "9/11", a ratio "24/7") are left untouched. */
+    private val SLASH_ALT = Regex("""(?<=\p{L})/(?=\p{L})""")
+
     private fun expandAbbreviations(text: String): String {
         val dotted = ABBREVIATION.replace(text) { m ->
             SPOKEN_ABBREVIATION.getValue(m.value.dropLast(1).lowercase())
         }
-        return BARE_TAGS.fold(dotted) { acc, (regex, word) -> regex.replace(acc, word) }
+        val bare = BARE_TAGS.fold(dotted) { acc, (regex, word) -> regex.replace(acc, word) }
+        val placeheld = PLACEHOLDER_TAGS.fold(bare) { acc, (regex, word) -> regex.replace(acc, word) }
+        return SLASH_ALT.replace(placeheld, " or ")
     }
+
+    /** Non-breaking / zero-width spaces (from "&nbsp;" etc. surviving HTML
+     *  decode). They are NOT whitespace to `\S`, so a blank token's `\S*…\S*`
+     *  would swallow the words glued to it ("was&nbsp;th•••••ck&nbsp;when" → one
+     *  token), wrecking restoration; normalise them to a plain space up front. */
+    private val HARD_SPACE = Regex(
+        // nbsp, figure space, narrow nbsp, word-joiner, BOM, zero-width space
+        intArrayOf(0x00A0, 0x2007, 0x202F, 0x2060, 0xFEFF, 0x200B)
+            .joinToString("", "[", "]") { it.toChar().toString() }
+    )
 
     private fun render(text: String, production: Boolean): List<Segment> {
         // Collapse a line that exactly repeats the one before it — a headword
         // field entered on two lines ("dash\ndash") would otherwise be read
         // "dash. dash."; hearing the same line twice in a row helps nobody.
-        val lines = dropAdjacentDuplicates(text.lines().map { it.trim() }.filter { it.isNotEmpty() })
+        val lines = dropAdjacentDuplicates(
+            HARD_SPACE.replace(text, " ").lines().map { it.trim() }.filter { it.isNotEmpty() }
+        )
 
         // Candidate words that might be the hidden word, visible on this side.
         val candidates = lines.filterNot { it.contains('•') }

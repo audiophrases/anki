@@ -334,6 +334,11 @@ object AnkiDroidApi {
                 "Looks good on p${b(4)} but ${b(2)} ${b(4)} com${b(6)}.",
                 "L${b(4)} g${b(3)} ${b(2)} p${b(4)} ${b(3)} ${b(2)} d${b(3)} c${b(7)}m.",
                 "L${b(4)} g${b(3)} ${b(2)} p${b(4)} ${b(3)} ${b(2)} d${b(3)} c${b(7)}m."),
+            // Dictionary placeholders + slash alternatives (very common in the main
+            // deck): "sth"→something, "sb"→somebody, "sth/sb"→"something or
+            // somebody". Should never be spoken as letters.
+            listOf("talk sth up", "praise sth/sb to make it seem more important",
+                "the agent t${b(3)}ed up the property to buyers", "t${b(3)} sth up"),
         )
         var added = 0
         for (f in notes) {
