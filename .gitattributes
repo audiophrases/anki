@@ -1,0 +1,21 @@
+# Normalize text to LF in the repo by default.
+* text=auto
+
+# The Gradle wrapper script must stay LF so it runs on macOS/Linux
+# even when checked out on a machine with core.autocrlf=true.
+gradlew         text eol=lf
+*.sh            text eol=lf
+
+# Windows scripts stay CRLF.
+gradlew.bat     text eol=crlf
+*.bat           text eol=crlf
+
+# Binary assets — never apply line-ending normalization (would corrupt them,
+# especially gradle-wrapper.jar which bootstraps the whole build).
+*.jar           binary
+*.webp          binary
+*.png           binary
+*.jpg           binary
+*.apk           binary
+*.keystore      binary
+*.anki2         binary
