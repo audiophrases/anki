@@ -7,7 +7,43 @@ so any machine that has the prerequisites can clone the repo and build the APK
 per-milestone code snapshots/notes; `android/` is the single source of truth that
 actually compiles.
 
+## Quickest path: install the committed APK (no Android toolchain)
+
+A ready-to-install debug APK is committed at
+[`dist/ankiaudio-debug.apk`](dist/ankiaudio-debug.apk), rebuilt from the current
+code on the machine that has the toolchain. A second machine can install it with
+**no Android SDK or JDK**:
+
+- **With `adb`** (needs only platform-tools, ~10 MB — not the full SDK):
+  ```sh
+  git pull
+  adb install -r dist/ankiaudio-debug.apk
+  ```
+- **With no tools at all:** copy `dist/ankiaudio-debug.apk` to the phone (USB,
+  cloud, email), tap it in the phone's Files app, and allow "install unknown
+  apps".
+
+Then launch the app once and **grant the AnkiDroid permission**. AnkiDroid must
+already be installed on that phone.
+
+### Rebuilding the committed APK (on the machine that has the toolchain)
+
+After changing code, regenerate and commit it in one step:
+```sh
+cd android
+./gradlew exportDebugApk      # builds + copies to ../dist/ankiaudio-debug.apk
+cd ..
+git add dist/ankiaudio-debug.apk && git commit -m "Update prebuilt APK"
+```
+It's a **debug** build, signed with the standard debug key, so it installs on any
+phone (a release build would need its own signing config). The APK is a ~13 MB
+binary committed for convenience — fine for personal syncing; if git history ever
+grows too heavy, switch it to Git LFS or stop committing it and build from source.
+
 ## What each machine needs (one time)
+
+> Only needed if you want to **build from source** on this machine (the section
+> above avoids all of this).
 
 1. **A JDK 17+** (the Gradle wrapper pulls Gradle itself, but it needs a JVM to
    start). If you have Android Studio, its bundled JDK works — point `JAVA_HOME`

@@ -31,8 +31,13 @@ To build it and put it on a phone (from this or any other machine), see
 
 ## Getting started
 
-- **Just build & install the app:** [BUILD.md](BUILD.md) — clone, point at your
-  Android SDK, `./gradlew installDebug` onto the phone.
+- **Just put the app on a phone (no toolchain):** install the committed
+  [`dist/ankiaudio-debug.apk`](dist/ankiaudio-debug.apk) —
+  `adb install -r dist/ankiaudio-debug.apk`, or copy it to the phone and tap it.
+  See [BUILD.md](BUILD.md).
+- **Build from source:** [BUILD.md](BUILD.md) — point at your Android SDK, then
+  `./gradlew installDebug` onto the phone (or `./gradlew exportDebugApk` to
+  refresh the committed APK).
 - **Background / first-time AnkiDroid + emulator set-up:** [SETUP.md](SETUP.md).
 
 ## How it connects to Anki
