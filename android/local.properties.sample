@@ -1,0 +1,20 @@
+# Copy this file to `local.properties` (same folder) on each machine.
+# `local.properties` is intentionally NOT committed — it holds the machine-specific
+# path to your Android SDK, which differs per computer.
+#
+# Set sdk.dir to wherever your Android SDK lives. Examples:
+#
+#   Windows (Android Studio default):
+#     sdk.dir=C:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
+#
+#   macOS:
+#     sdk.dir=/Users/<you>/Library/Android/sdk
+#
+#   Linux:
+#     sdk.dir=/home/<you>/Android/Sdk
+#
+# Alternative: instead of this file you can export the ANDROID_HOME (or
+# ANDROID_SDK_ROOT) environment variable to your SDK path; Gradle will use that.
+# If you open this project in Android Studio it generates local.properties for you.
+
+sdk.dir=C:\\Users\\<you>\\AppData\\Local\\Android\\Sdk

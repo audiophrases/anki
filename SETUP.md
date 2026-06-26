@@ -1,5 +1,11 @@
 # Setup — Anki eyes-free audio study (Android)
 
+> **Note:** The app is now a committed, ready-to-build Gradle project in
+> [`android/`](android/) — you no longer need to hand-create an Android Studio
+> project and copy files in. To just build and install it, see
+> **[BUILD.md](BUILD.md)**. The steps below remain as background on the AnkiDroid
+> side (emulator, test deck, permission) and the project's original bring-up.
+
 Goal of the whole project: an Android app that lets you study AnkiDroid cards
 **eyes-free, screen off** — it speaks the card, you advance/rate with volume or
 media buttons (later: voice). It talks to AnkiDroid through AnkiDroid's official

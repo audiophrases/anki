@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    tools:context=".MainActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingBottom="4dp"
+            android:text="Deck"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/deckSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingBottom="4dp"
+            android:text="Voice"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/voiceSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="56dp" />
+
+        <Button
+            android:id="@+id/testVoiceButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:backgroundTint="#607D8B"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🔊  Test voice"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/seedButton"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginBottom="8dp"
+            android:backgroundTint="#9E9E9E"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🧪  Seed test deck"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/statusView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="12dp"
+            android:text="Ready."
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/questionView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="8dp"
+            android:text=""
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/answerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="16dp"
+            android:text=""
+            android:textSize="20sp" />
+
+        <!-- Eyes-free (screen off, vol-up/down) mode is hidden for now;
+             set visibility back to visible to re-enable. -->
+        <Button
+            android:id="@+id/sessionButton"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#5C6BC0"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🌙  Eyes-free (screen off)"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/touchButton"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#7E57C2"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🛏  Touch study (bed mode)"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/carButton"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#00897B"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🚗  Car mode (voice)"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/studyButton"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginBottom="20dp"
+            android:backgroundTint="#1E88E5"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="▶  Start study (here)"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingBottom="6dp"
+            android:text="During study"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/showButton"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#455A64"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="👁  Show answer"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="19sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/againButton"
+                android:layout_width="0dp"
+                android:layout_height="80dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#E53935"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="✗  Again"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/goodButton"
+                android:layout_width="0dp"
+                android:layout_height="80dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#43A047"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="✓  Good"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/replayButton"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#616161"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="🔁  Replay"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/undoButton"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#616161"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="↩  Undo"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!-- Shown only during an in-app ("Start study (here)") round. -->
+        <Button
+            android:id="@+id/editButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="12dp"
+            android:backgroundTint="#FB8C00"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="✏  Edit card"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+    </LinearLayout>
+</ScrollView>

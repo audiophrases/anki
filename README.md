@@ -11,8 +11,14 @@ app just supplies the rating.
 
 ## Status
 
-- **M0 (in progress)** — prove the data path: read a due card, rate it, write
-  back. Source in [`m0/`](m0/).
+The working app is built through **M3** (touch-zone "bed mode", screen-off
+session, volume/voice control, Edge neural TTS with prefetch + cache). The
+complete, buildable Gradle project is in [`android/`](android/) — that is the
+single source of truth that compiles and installs. The `m0`–`m3` folders are
+historical per-milestone code snapshots and notes.
+
+To build it and put it on a phone (from this or any other machine), see
+**[BUILD.md](BUILD.md)**.
 
 ## Roadmap
 
@@ -25,8 +31,9 @@ app just supplies the rating.
 
 ## Getting started
 
-See [SETUP.md](SETUP.md) — goes from nothing installed to M0 running on an
-Android emulator with AnkiDroid.
+- **Just build & install the app:** [BUILD.md](BUILD.md) — clone, point at your
+  Android SDK, `./gradlew installDebug` onto the phone.
+- **Background / first-time AnkiDroid + emulator set-up:** [SETUP.md](SETUP.md).
 
 ## How it connects to Anki
 

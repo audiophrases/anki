@@ -1,1 +1,14 @@
-.
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.iml
+
+# Android build output & machine-specific config for the buildable project in android/.
+# (android/.gitignore also covers these; listed here too so a clone from the repo root
+#  never accidentally stages build artifacts or your local SDK path.)
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.idea/
