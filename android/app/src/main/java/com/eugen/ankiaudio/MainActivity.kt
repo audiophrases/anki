@@ -120,6 +120,10 @@ class MainActivity : AppCompatActivity() {
                 Intent(this, TouchStudyActivity::class.java)
                     .putExtra(TouchStudyActivity.EXTRA_DECK, selectedDeckName())
             )
+            status(
+                "Bed mode — tap: reveal/rate · swipe down: replay · two fingers: " +
+                    "undo · three fingers: show the gesture chart · four fingers: stop."
+            )
         }
         studyButton.setOnClickListener { toggleStudy() }
         findViewById<Button>(R.id.testVoiceButton).setOnClickListener {
@@ -349,7 +353,7 @@ class MainActivity : AppCompatActivity() {
         )
         status(
             "Car mode — speak between playbacks: show · repeat · good · easy · " +
-                "hard · again · undo · bookmark · stop. Bed-mode gestures work too."
+                "hard · again · undo · bookmark · gestures · stop. Bed-mode gestures work too."
         )
     }
 

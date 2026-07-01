@@ -25,7 +25,7 @@ class VoiceControl(
     private val onCommand: (Command) -> Unit,
 ) {
 
-    enum class Command { REVEAL, REPEAT, GOOD, EASY, HARD, AGAIN, UNDO, BOOKMARK, STOP }
+    enum class Command { REVEAL, REPEAT, GOOD, EASY, HARD, AGAIN, UNDO, BOOKMARK, GESTURES, STOP }
 
     private companion object {
         const val TAG = "VoiceControl"
@@ -62,6 +62,9 @@ class VoiceControl(
             "undo" to Command.UNDO,
             "bookmark" to Command.BOOKMARK,
             "mark" to Command.BOOKMARK,
+            "gestures" to Command.GESTURES,
+            "help" to Command.GESTURES,
+            "commands" to Command.GESTURES,
             "stop" to Command.STOP,
             "finish" to Command.STOP,
         )

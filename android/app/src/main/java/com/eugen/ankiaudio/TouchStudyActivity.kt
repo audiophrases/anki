@@ -9,8 +9,10 @@ import android.view.GestureDetector
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -30,8 +32,15 @@ import kotlinx.coroutines.launch
  *   Question phase:  tap anywhere = reveal · swipe down = replay
  *   Answer phase:    tap BOTTOM half = Good   (double-tap = Easy)
  *                    tap TOP half    = Again  (double-tap = Hard)
- *   Any phase:       two-finger tap = Undo · long-press = bookmark-tag the
- *                    card (tag "audio-bookmark", for later desktop editing)
+ *   Any phase:       two-finger tap = Undo · three-finger tap = show the
+ *                    gesture chart · long-press = bookmark-tag the card
+ *                    (tag "audio-bookmark", for later desktop editing)
+ *
+ * The gesture chart is on demand only (three-finger tap, or "gestures" in car
+ * mode) — never forced at the start of a session, so a user who knows the
+ * gestures never sees it. It is a visual overlay (colour-coded tap zones and a
+ * legend) that briefly restores screen brightness, then dims back on dismiss;
+ * card audio keeps playing behind it.
  *
  * Every action answers back with haptics + speech, so eyes stay closed.
  * Volume keys stay ordinary volume keys here — touch has enough inputs.
@@ -47,6 +56,10 @@ class TouchStudyActivity : AppCompatActivity() {
         const val EXTRA_DECK = "deck"
         const val EXTRA_VOICE = "voice"
         const val BOOKMARK_TAG = "audio-bookmark"
+
+        /** Backlight for eyes-free study vs. while the gesture chart is up. */
+        private const val DIM_BRIGHTNESS = 0.01f
+        private const val CHART_BRIGHTNESS = 0.6f
     }
 
     private lateinit var speaker: CardSpeaker
@@ -57,9 +70,13 @@ class TouchStudyActivity : AppCompatActivity() {
 
     /** Multi-finger handling: suppress single-finger gestures around it. */
     private var twoFingerDownAt = 0L
+    private var threeFingerDownAt = 0L
     private var fourFingerDownAt = 0L
     private var suppressSingleUntil = 0L
     private var exiting = false
+
+    /** The on-demand gesture chart overlay, non-null only while it is showing. */
+    private var chartOverlay: View? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,7 +103,7 @@ class TouchStudyActivity : AppCompatActivity() {
         setContentView(root)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window.attributes = window.attributes.apply { screenBrightness = 0.01f }
+        setBrightness(DIM_BRIGHTNESS)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, root).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -163,8 +180,15 @@ class TouchStudyActivity : AppCompatActivity() {
                     ev.pointerCount >= 4 -> {
                         // Four fingers trump everything: stop & exit gesture.
                         fourFingerDownAt = SystemClock.elapsedRealtime()
+                        threeFingerDownAt = 0
                         twoFingerDownAt = 0
                         suppressSingleUntil = fourFingerDownAt + 900
+                    }
+                    ev.pointerCount == 3 -> {
+                        // Three fingers: speak the gesture reminder on demand.
+                        threeFingerDownAt = SystemClock.elapsedRealtime()
+                        twoFingerDownAt = 0
+                        suppressSingleUntil = threeFingerDownAt + 800
                     }
                     ev.pointerCount == 2 -> {
                         twoFingerDownAt = SystemClock.elapsedRealtime()
@@ -178,12 +202,17 @@ class TouchStudyActivity : AppCompatActivity() {
                             haptic(HapticFeedbackConstants.LONG_PRESS)
                             stopAndExit()
                         }
+                        threeFingerDownAt > 0 && now - threeFingerDownAt < 500 -> {
+                            haptic(HapticFeedbackConstants.CONFIRM)
+                            showGestureChart()
+                        }
                         twoFingerDownAt > 0 && now - twoFingerDownAt < 450 -> {
                             haptic(HapticFeedbackConstants.CONFIRM)
                             lifecycleScope.launch { engine.undo() }
                         }
                     }
                     twoFingerDownAt = 0
+                    threeFingerDownAt = 0
                     fourFingerDownAt = 0
                 }
             }
@@ -229,6 +258,7 @@ class TouchStudyActivity : AppCompatActivity() {
                     if (engine.answerShown) engine.rate(AnkiDroidApi.EASE_AGAIN)
                 VoiceControl.Command.UNDO -> engine.undo()
                 VoiceControl.Command.BOOKMARK -> engine.bookmark(BOOKMARK_TAG)
+                VoiceControl.Command.GESTURES -> showGestureChart()
                 VoiceControl.Command.STOP -> stopAndExit()
             }
         }
@@ -244,6 +274,120 @@ class TouchStudyActivity : AppCompatActivity() {
             delay(1500) // let the confirmation play before tearing down
             finish()
         }
+    }
+
+    /**
+     * On-demand visual gesture chart (three-finger tap, or "gestures" in car
+     * mode). A full-screen overlay of colour-coded tap zones — red top half =
+     * Again/Hard, green bottom half = Good/Easy, mirroring where you actually
+     * tap — plus a legend of the whole-screen gestures. Restores readable
+     * brightness while up; a tap anywhere dismisses it and dims back down.
+     * Purely visual, so the card audio keeps playing behind it.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun showGestureChart() {
+        if (chartOverlay != null) return
+        val density = resources.displayMetrics.density
+        fun dp(v: Int): Int = (v * density).toInt()
+
+        fun line(text: String, size: Float, color: String, top: Int, bottom: Int) =
+            TextView(this).apply {
+                this.text = text
+                textSize = size
+                setTextColor(Color.parseColor(color))
+                gravity = Gravity.CENTER
+                setPadding(dp(20), dp(top), dp(20), dp(bottom))
+            }
+
+        // A rating half: heading + single-tap action + double-tap action.
+        fun zone(bg: String, heading: String, tap: String, doubleTap: String) =
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setBackgroundColor(Color.parseColor(bg))
+                addView(TextView(context).apply {
+                    text = heading
+                    textSize = 12f
+                    setTextColor(Color.parseColor("#99FFFFFF"))
+                    gravity = Gravity.CENTER
+                    letterSpacing = 0.2f
+                })
+                addView(TextView(context).apply {
+                    text = tap
+                    textSize = 25f
+                    setTextColor(Color.WHITE)
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(6), 0, 0)
+                })
+                addView(TextView(context).apply {
+                    text = doubleTap
+                    textSize = 16f
+                    setTextColor(Color.parseColor("#CCFFFFFF"))
+                    gravity = Gravity.CENTER
+                })
+            }
+
+        val overlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#F5000000"))
+            isClickable = true // consume touches so nothing leaks to the study surface
+            setOnClickListener { hideGestureChart() }
+
+            addView(line("Gestures", 20f, "#FFFFFFFF", top = 18, bottom = 2), matchWrap())
+            addView(
+                line("When the answer is showing, tap the half you mean",
+                    13f, "#AAFFFFFF", top = 0, bottom = 10),
+                matchWrap()
+            )
+            addView(zone("#4A1A1E", "TOP HALF", "Again", "double-tap: Hard"), matchWeight())
+            addView(zone("#12331F", "BOTTOM HALF", "Good", "double-tap: Easy"), matchWeight())
+            addView(
+                line("During the question, a tap anywhere reveals the answer",
+                    13f, "#CCFFFFFF", top = 12, bottom = 8),
+                matchWrap()
+            )
+            addView(
+                line(
+                    "Swipe down — replay\n" +
+                        "Two fingers — undo\n" +
+                        "Long-press — bookmark\n" +
+                        "Three fingers — this chart\n" +
+                        "Four fingers — stop",
+                    15f, "#DDFFFFFF", top = 0, bottom = 8
+                ).apply { setLineSpacing(dp(5).toFloat(), 1f) },
+                matchWrap()
+            )
+            addView(line("Tap anywhere to close", 12f, "#88FFFFFF", top = 6, bottom = 18), matchWrap())
+        }
+
+        root.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        chartOverlay = overlay
+        setBrightness(CHART_BRIGHTNESS)
+    }
+
+    private fun hideGestureChart() {
+        val overlay = chartOverlay ?: return
+        chartOverlay = null
+        root.removeView(overlay)
+        setBrightness(DIM_BRIGHTNESS)
+    }
+
+    private fun matchWrap() = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+    )
+
+    private fun matchWeight() = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+    )
+
+    private fun setBrightness(value: Float) {
+        window.attributes = window.attributes.apply { screenBrightness = value }
     }
 
     private fun suppressed(): Boolean = SystemClock.elapsedRealtime() < suppressSingleUntil

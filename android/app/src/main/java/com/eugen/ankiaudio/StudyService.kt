@@ -185,6 +185,7 @@ class StudyService : Service() {
                 VoiceControl.Command.UNDO -> engine.undo()
                 VoiceControl.Command.BOOKMARK ->
                     engine.bookmark(TouchStudyActivity.BOOKMARK_TAG)
+                VoiceControl.Command.GESTURES -> speakControlReminder()
                 VoiceControl.Command.STOP -> {
                     engine.stop()
                     speaker.speak(listOf(Segment.Speech("Study stopped.")))
@@ -192,6 +193,28 @@ class StudyService : Service() {
                 }
             }
         }
+    }
+
+    /**
+     * On-demand spoken reminder of this session's controls (the "gestures"
+     * voice command). Screen-off mode is driven by the volume rocker and the
+     * notification, so it describes those rather than the touch gestures.
+     */
+    private fun speakControlReminder() {
+        speaker.speak(listOf(
+            Segment.Speech("Controls reminder."),
+            Segment.Pause(400),
+            Segment.Speech(
+                "Volume up reveals the answer, then rates it Good. " +
+                    "Volume down replays the question, then rates it Again."
+            ),
+            Segment.Pause(400),
+            Segment.Speech(
+                "The notification has Undo, Replay, Reveal, and Stop. " +
+                    "Or say: show, repeat, good, easy, hard, again, undo, " +
+                    "bookmark, gestures, or stop."
+            ),
+        ))
     }
 
     private fun endSessionSoon() {
