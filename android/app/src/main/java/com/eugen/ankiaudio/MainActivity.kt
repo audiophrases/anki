@@ -8,14 +8,10 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -114,6 +110,9 @@ class MainActivity : AppCompatActivity() {
                 requestMicPermission.launch(mic)
             }
         }
+        findViewById<Button>(R.id.gesturesButton).setOnClickListener {
+            startActivity(Intent(this, GestureChartActivity::class.java))
+        }
         findViewById<Button>(R.id.touchButton).setOnClickListener {
             lifecycleScope.launch { if (engine.active) engine.stop() }
             startActivity(
@@ -121,8 +120,9 @@ class MainActivity : AppCompatActivity() {
                     .putExtra(TouchStudyActivity.EXTRA_DECK, selectedDeckName())
             )
             status(
-                "Bed mode — tap: reveal/rate · swipe down: replay · two fingers: " +
-                    "undo · three fingers: show the gesture chart · four fingers: stop."
+                "Bed mode — tap: reveal/rate · swipe down: replay · swipe up: edit · " +
+                    "two fingers: undo · three fingers: show the gesture chart · " +
+                    "four fingers: stop."
             )
         }
         studyButton.setOnClickListener { toggleStudy() }
@@ -275,9 +275,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Manual edit of the card on screen during an in-app study round: load its
-     * note's fields, let the user edit them in a simple dialog, write them back
-     * through AnkiDroid, then re-render so the change is spoken on replay.
+     * Manual edit of the card on screen during an in-app study round, via the
+     * shared [NoteEditDialog] (same editor the touch/car surface opens on a
+     * swipe up). Reloads the card afterwards so the change is spoken on replay.
      */
     private fun editCurrentCard() {
         val card = engine.current
@@ -285,60 +285,7 @@ class MainActivity : AppCompatActivity() {
             status("Edit is available only while studying here.")
             return
         }
-        lifecycleScope.launch {
-            val fields = withContext(Dispatchers.IO) {
-                runCatching { AnkiDroidApi.noteFields(this@MainActivity, card.noteId) }.getOrNull()
-            }
-            if (fields == null) {
-                status("Couldn't load this card's fields.")
-                return@launch
-            }
-            showEditDialog(card.noteId, fields)
-        }
-    }
-
-    /** One labelled text box per note field; Save writes them back via the provider. */
-    private fun showEditDialog(noteId: Long, fields: AnkiDroidApi.NoteFields) {
-        val density = resources.displayMetrics.density
-        val pad = (16 * density).toInt()
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad / 2, pad, 0)
-        }
-        val inputs = fields.values.mapIndexed { i, value ->
-            container.addView(TextView(this).apply {
-                text = fields.names.getOrElse(i) { "Field ${i + 1}" }
-                textSize = 13f
-                setPadding(0, (8 * density).toInt(), 0, 0)
-            })
-            EditText(this).apply {
-                setText(value)
-                setSelection(text.length)
-                container.addView(this)
-            }
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Edit card")
-            .setView(ScrollView(this).apply { addView(container) })
-            .setPositiveButton("Save") { _, _ ->
-                val newValues = inputs.map { it.text.toString() }
-                lifecycleScope.launch {
-                    val ok = withContext(Dispatchers.IO) {
-                        runCatching {
-                            AnkiDroidApi.updateNoteFields(this@MainActivity, noteId, newValues)
-                        }.getOrDefault(false)
-                    }
-                    if (ok) {
-                        engine.reloadCurrent()
-                        status("Card saved.")
-                    } else {
-                        status("Saving the edit failed.")
-                    }
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        NoteEditDialog.show(this, engine, lifecycleScope, card.noteId, ::status) { }
     }
 
     // ---- eyes-free session ----

@@ -108,6 +108,19 @@
             android:visibility="gone" />
 
         <Button
+            android:id="@+id/gesturesButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#8D6E63"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="👆  Gestures"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp" />
+
+        <Button
             android:id="@+id/touchButton"
             android:layout_width="match_parent"
             android:layout_height="64dp"

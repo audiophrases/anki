@@ -12,7 +12,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -32,9 +31,10 @@ import kotlinx.coroutines.launch
  *   Question phase:  tap anywhere = reveal · swipe down = replay
  *   Answer phase:    tap BOTTOM half = Good   (double-tap = Easy)
  *                    tap TOP half    = Again  (double-tap = Hard)
- *   Any phase:       two-finger tap = Undo · three-finger tap = show the
- *                    gesture chart · long-press = bookmark-tag the card
- *                    (tag "audio-bookmark", for later desktop editing)
+ *   Any phase:       swipe up = edit this card in the bright editor · two-finger
+ *                    tap = Undo · three-finger tap = show the gesture chart ·
+ *                    long-press = bookmark-tag the card (tag "audio-bookmark",
+ *                    for later desktop editing)
  *
  * The gesture chart is on demand only (three-finger tap, or "gestures" in car
  * mode) — never forced at the start of a session, so a user who knows the
@@ -60,6 +60,9 @@ class TouchStudyActivity : AppCompatActivity() {
         /** Backlight for eyes-free study vs. while the gesture chart is up. */
         private const val DIM_BRIGHTNESS = 0.01f
         private const val CHART_BRIGHTNESS = 0.6f
+
+        /** Defer to the system/user brightness while the note editor is open. */
+        private const val EDIT_BRIGHTNESS = -1f // WindowManager.BRIGHTNESS_OVERRIDE_NONE
     }
 
     private lateinit var speaker: CardSpeaker
@@ -166,9 +169,14 @@ class TouchStudyActivity : AppCompatActivity() {
                 e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float
             ): Boolean {
                 if (suppressed()) return true
-                if (velocityY > 1200 && abs(velocityY) > 2 * abs(velocityX)) {
+                val verticalDominant = abs(velocityY) > 2 * abs(velocityX)
+                if (verticalDominant && velocityY > 1200) {
                     haptic(HapticFeedbackConstants.CONFIRM)
                     engine.replayQuestion()
+                } else if (verticalDominant && velocityY < -1200) {
+                    // Swipe up: hand off to the bright card editor.
+                    haptic(HapticFeedbackConstants.CONFIRM)
+                    editCurrentNote()
                 }
                 return true
             }
@@ -284,82 +292,9 @@ class TouchStudyActivity : AppCompatActivity() {
      * brightness while up; a tap anywhere dismisses it and dims back down.
      * Purely visual, so the card audio keeps playing behind it.
      */
-    @SuppressLint("ClickableViewAccessibility")
     private fun showGestureChart() {
         if (chartOverlay != null) return
-        val density = resources.displayMetrics.density
-        fun dp(v: Int): Int = (v * density).toInt()
-
-        fun line(text: String, size: Float, color: String, top: Int, bottom: Int) =
-            TextView(this).apply {
-                this.text = text
-                textSize = size
-                setTextColor(Color.parseColor(color))
-                gravity = Gravity.CENTER
-                setPadding(dp(20), dp(top), dp(20), dp(bottom))
-            }
-
-        // A rating half: heading + single-tap action + double-tap action.
-        fun zone(bg: String, heading: String, tap: String, doubleTap: String) =
-            LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setBackgroundColor(Color.parseColor(bg))
-                addView(TextView(context).apply {
-                    text = heading
-                    textSize = 12f
-                    setTextColor(Color.parseColor("#99FFFFFF"))
-                    gravity = Gravity.CENTER
-                    letterSpacing = 0.2f
-                })
-                addView(TextView(context).apply {
-                    text = tap
-                    textSize = 25f
-                    setTextColor(Color.WHITE)
-                    gravity = Gravity.CENTER
-                    setPadding(0, dp(6), 0, 0)
-                })
-                addView(TextView(context).apply {
-                    text = doubleTap
-                    textSize = 16f
-                    setTextColor(Color.parseColor("#CCFFFFFF"))
-                    gravity = Gravity.CENTER
-                })
-            }
-
-        val overlay = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#F5000000"))
-            isClickable = true // consume touches so nothing leaks to the study surface
-            setOnClickListener { hideGestureChart() }
-
-            addView(line("Gestures", 20f, "#FFFFFFFF", top = 18, bottom = 2), matchWrap())
-            addView(
-                line("When the answer is showing, tap the half you mean",
-                    13f, "#AAFFFFFF", top = 0, bottom = 10),
-                matchWrap()
-            )
-            addView(zone("#4A1A1E", "TOP HALF", "Again", "double-tap: Hard"), matchWeight())
-            addView(zone("#12331F", "BOTTOM HALF", "Good", "double-tap: Easy"), matchWeight())
-            addView(
-                line("During the question, a tap anywhere reveals the answer",
-                    13f, "#CCFFFFFF", top = 12, bottom = 8),
-                matchWrap()
-            )
-            addView(
-                line(
-                    "Swipe down — replay\n" +
-                        "Two fingers — undo\n" +
-                        "Long-press — bookmark\n" +
-                        "Three fingers — this chart\n" +
-                        "Four fingers — stop",
-                    15f, "#DDFFFFFF", top = 0, bottom = 8
-                ).apply { setLineSpacing(dp(5).toFloat(), 1f) },
-                matchWrap()
-            )
-            addView(line("Tap anywhere to close", 12f, "#88FFFFFF", top = 6, bottom = 18), matchWrap())
-        }
-
+        val overlay = GestureChart.build(this) { hideGestureChart() }
         root.addView(
             overlay,
             FrameLayout.LayoutParams(
@@ -378,13 +313,34 @@ class TouchStudyActivity : AppCompatActivity() {
         setBrightness(DIM_BRIGHTNESS)
     }
 
-    private fun matchWrap() = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    )
+    /**
+     * Swipe up: pause the audio (and the car-mode mic), restore normal
+     * brightness and open the shared [NoteEditDialog] on the current card. On
+     * dismiss we dim back down, resume, and — if it was saved — replay the
+     * updated card. Same surface throughout, so we return to whichever mode
+     * (bed or car) we were in.
+     */
+    private fun editCurrentNote() {
+        val card = engine.current ?: return
+        if (chartOverlay != null) hideGestureChart() // don't stack the editor under the chart
+        speaker.stop()
+        voice?.pause()
+        setBrightness(EDIT_BRIGHTNESS)
+        NoteEditDialog.show(
+            context = this,
+            engine = engine,
+            scope = lifecycleScope,
+            noteId = card.noteId,
+            onStatus = { msg -> runOnUiThread { stateView.text = msg } },
+            onClosed = { saved -> afterEdit(saved) },
+        )
+    }
 
-    private fun matchWeight() = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-    )
+    private fun afterEdit(saved: Boolean) {
+        setBrightness(DIM_BRIGHTNESS)
+        voice?.resume()
+        if (saved) engine.replay() // re-speak the edited card
+    }
 
     private fun setBrightness(value: Float) {
         window.attributes = window.attributes.apply { screenBrightness = value }
