@@ -95,7 +95,7 @@ object GestureChart {
                     "Swipe up — edit card\n" +
                         "Swipe down — replay\n" +
                         "Two fingers — undo\n" +
-                        "Long-press — bookmark\n" +
+                        "Long-press (1 s) — bookmark\n" +
                         "Three fingers — lights on/off (card + this reminder)\n" +
                         "Four fingers — stop",
                     15f, "#DDFFFFFF", top = 0, bottom = 8

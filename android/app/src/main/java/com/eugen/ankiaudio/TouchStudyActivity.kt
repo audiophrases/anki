@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -19,6 +20,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -33,8 +35,9 @@ import kotlinx.coroutines.launch
  *                    tap TOP half    = Hard   (double-tap = Again)
  *   Any phase:       swipe up = edit this card in the bright editor · two-finger
  *                    tap = Undo · three-finger tap = lights on/off ·
- *                    long-press = bookmark-tag the card (tag "audio-bookmark",
- *                    for later desktop editing)
+ *                    long-press (hold 1 s until the buzz, let go) = bookmark-
+ *                    tag the card (tag "audio-bookmark", for later desktop
+ *                    editing)
  *
  * Lights off (bed and car mode's start): black, with the backlight forced to
  * minimum — the panel is LCD, so black alone still glows. Lights on (couch
@@ -65,6 +68,15 @@ class TouchStudyActivity : AppCompatActivity() {
 
         /** Lights on and the note editor defer to the system/user brightness. */
         private const val NORMAL_BRIGHTNESS = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+
+        /**
+         * Hold this long, without moving, to arm the long-press (bookmark), which
+         * lands when the finger lifts in place. Timed here rather than by
+         * [GestureDetector], whose system-wide ~0.4 s caught slow, resting taps —
+         * and swallowed a swipe that started after a short rest. Anything shorter
+         * counts as a tap; moving, even after a long rest, is a swipe.
+         */
+        private const val LONG_PRESS_MS = 1000L
     }
 
     private lateinit var speaker: CardSpeaker
@@ -86,6 +98,17 @@ class TouchStudyActivity : AppCompatActivity() {
     private var fourFingerDownAt = 0L
     private var suppressSingleUntil = 0L
     private var exiting = false
+
+    /** Taps, double-taps and swipes; the long-press is our own timer ([LONG_PRESS_MS]). */
+    private lateinit var detector: GestureDetector
+    private val armLongPress = Runnable {
+        if (suppressed()) return@Runnable
+        longPressArmed = true
+        haptic(HapticFeedbackConstants.LONG_PRESS) // held long enough: let go to bookmark
+    }
+    private var longPressArmed = false
+    private var downX = 0f
+    private var downY = 0f
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -137,7 +160,7 @@ class TouchStudyActivity : AppCompatActivity() {
             }
         }
 
-        val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+        detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
 
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                 if (suppressed()) return true
@@ -173,12 +196,6 @@ class TouchStudyActivity : AppCompatActivity() {
                 return true
             }
 
-            override fun onLongPress(e: MotionEvent) {
-                if (suppressed()) return
-                haptic(HapticFeedbackConstants.LONG_PRESS)
-                lifecycleScope.launch { engine.bookmark(BOOKMARK_TAG) }
-            }
-
             override fun onFling(
                 e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float
             ): Boolean {
@@ -194,30 +211,45 @@ class TouchStudyActivity : AppCompatActivity() {
                 }
                 return true
             }
-        })
+        }).apply { setIsLongpressEnabled(false) }
 
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         root.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
-                MotionEvent.ACTION_POINTER_DOWN -> when {
-                    ev.pointerCount >= 4 -> {
-                        // Four fingers trump everything: stop & exit gesture.
-                        fourFingerDownAt = SystemClock.elapsedRealtime()
-                        threeFingerDownAt = 0
-                        twoFingerDownAt = 0
-                        suppressSingleUntil = fourFingerDownAt + 900
-                    }
-                    ev.pointerCount == 3 -> {
-                        // Three fingers: lights on/off (card + controls reminder).
-                        threeFingerDownAt = SystemClock.elapsedRealtime()
-                        twoFingerDownAt = 0
-                        suppressSingleUntil = threeFingerDownAt + 800
-                    }
-                    ev.pointerCount == 2 -> {
-                        twoFingerDownAt = SystemClock.elapsedRealtime()
-                        suppressSingleUntil = twoFingerDownAt + 700
+                MotionEvent.ACTION_DOWN -> {
+                    longPressArmed = false
+                    downX = ev.x
+                    downY = ev.y
+                    root.postDelayed(armLongPress, LONG_PRESS_MS)
+                }
+                // Moving makes it a drag or swipe, even after a long rest.
+                MotionEvent.ACTION_MOVE ->
+                    if (hypot(ev.x - downX, ev.y - downY) > touchSlop) cancelLongPress()
+                MotionEvent.ACTION_CANCEL -> cancelLongPress()
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    cancelLongPress()
+                    when {
+                        ev.pointerCount >= 4 -> {
+                            // Four fingers trump everything: stop & exit gesture.
+                            fourFingerDownAt = SystemClock.elapsedRealtime()
+                            threeFingerDownAt = 0
+                            twoFingerDownAt = 0
+                            suppressSingleUntil = fourFingerDownAt + 900
+                        }
+                        ev.pointerCount == 3 -> {
+                            // Three fingers: lights on/off (card + controls reminder).
+                            threeFingerDownAt = SystemClock.elapsedRealtime()
+                            twoFingerDownAt = 0
+                            suppressSingleUntil = threeFingerDownAt + 800
+                        }
+                        ev.pointerCount == 2 -> {
+                            twoFingerDownAt = SystemClock.elapsedRealtime()
+                            suppressSingleUntil = twoFingerDownAt + 700
+                        }
                     }
                 }
                 MotionEvent.ACTION_UP -> {
+                    root.removeCallbacks(armLongPress)
                     val now = SystemClock.elapsedRealtime()
                     when {
                         fourFingerDownAt > 0 && now - fourFingerDownAt < 600 -> {
@@ -238,7 +270,17 @@ class TouchStudyActivity : AppCompatActivity() {
                     fourFingerDownAt = 0
                 }
             }
-            detector.onTouchEvent(ev)
+            if (ev.actionMasked == MotionEvent.ACTION_UP && longPressArmed) {
+                // Held still past LONG_PRESS_MS and let go in place: bookmark. The
+                // detector must not also read this release as a tap.
+                longPressArmed = false
+                val cancel = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+                detector.onTouchEvent(cancel)
+                cancel.recycle()
+                lifecycleScope.launch { engine.bookmark(BOOKMARK_TAG) }
+            } else {
+                detector.onTouchEvent(ev)
+            }
             true
         }
 
@@ -258,6 +300,7 @@ class TouchStudyActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        root.removeCallbacks(armLongPress)
         voice?.stop()
         engine.stopBlocking() // commits a pending rating
         speaker.shutdown()
@@ -348,6 +391,12 @@ class TouchStudyActivity : AppCompatActivity() {
 
     private fun setBrightness(value: Float) {
         window.attributes = window.attributes.apply { screenBrightness = value }
+    }
+
+    /** The touch moved, grew fingers or was cancelled: it isn't a long-press. */
+    private fun cancelLongPress() {
+        root.removeCallbacks(armLongPress)
+        longPressArmed = false
     }
 
     private fun suppressed(): Boolean = SystemClock.elapsedRealtime() < suppressSingleUntil

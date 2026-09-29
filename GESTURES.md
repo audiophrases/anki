@@ -34,7 +34,7 @@ Any time, **anywhere on the screen** (top/bottom zones don't apply to these):
 | **Two-finger tap** | Undo last rating |
 | **Three-finger tap** | Lights on/off: the card being read + this cheat sheet on screen (see Couch mode) |
 | **Four-finger tap** | Stop study & return to the start menu (saves the pending rating, confirms "Study stopped.") |
-| **Long-press** | Bookmark card (tag `audio-bookmark` — find later on desktop with `tag:audio-bookmark`) |
+| **Long-press** (hold ~1 s until the buzz, then let go) | Bookmark card (tag `audio-bookmark` — find later on desktop with `tag:audio-bookmark`). A shorter slow tap is still a tap, and moving after the buzz makes it a swipe |
 | **Swipe down** | Replay question (also works after reveal) |
 | **Swipe up** | Edit this card (opens the editor at normal brightness, then returns to the same mode) |
 

@@ -107,7 +107,7 @@ class LitCardView(context: Context, voice: Boolean) : FrameLayout(context) {
                 append("undo · bookmark · bright · dark · stop\n")
             }
             append("Swipe down: replay · Swipe up: edit card\n")
-            append("Two fingers: undo · Long-press: bookmark\n")
+            append("Two fingers: undo · Long-press 1 s: bookmark\n")
             append("Three fingers: lights off · Four fingers: stop")
         }
     }
