@@ -23,8 +23,10 @@ sealed interface Segment {
  *
  * - **RECOGNITION** (word given, recall the meaning — the word is visible on
  *   this side): a blank is pointless by ear, so it is RESTORED from the
- *   visible word ("She wheedled him into taking her with him.") and the
- *   dedicated hint field (a line like "wh•••••") is NOT read at all.
+ *   studied word ("She wheedled him into taking her with him.") and the
+ *   dedicated hint field (a line like "wh•••••") is NOT read at all. Every
+ *   blank is filled — with the whole word/phrase when its exact form can't be
+ *   worked out — so a recognition card never says "blank".
  * - **PRODUCTION** (meaning given, produce the word — the word is hidden):
  *   in the example sentence each hidden word becomes the codeword "blank"
  *   so the sentence keeps its natural flow ("She blank him into taking her
@@ -54,8 +56,23 @@ object AudioScript {
 
     private const val LINE_PAUSE_MS = 400L
 
-    fun forQuestion(questionText: String, word: String = ""): List<Segment> =
-        render(questionText, isProduction(questionText, word))
+    fun forQuestion(questionText: String, word: String = ""): List<Segment> {
+        val question = plainSpaces(questionText)
+        val w = plainSpaces(word)
+        val production = isProduction(question, w)
+        return render(question, production, headword(w, production))
+    }
+
+    /**
+     * Anki fields are full of `&nbsp;`, which arrives as U+00A0. It isn't `\s` to
+     * the regexes here, so it would fuse neighbouring words into one blank token
+     * ("was th•••••st••ck when" → a single 22-letter blank). Make it a plain space.
+     */
+    private fun plainSpaces(s: String): String = s.replace('\u00A0', ' ')
+
+    /** The studied word to restore blanks from — only on a known recognition card. */
+    private fun headword(word: String, production: Boolean): String? =
+        word.takeIf { it.isNotBlank() && !production }
 
     /**
      * Whether this is a PRODUCTION card (learner must supply the word) — known,
@@ -63,14 +80,17 @@ object AudioScript {
      * recognition side and hidden on production, so its absence from the rendered
      * [question] means production. An empty [word] (unknown) falls back to the old
      * restore-from-visible-words behaviour, i.e. treated as recognition.
+     *
+     * The word must fill whole line(s) of the question — its own field — not merely
+     * occur in it: a production definition can contain the word itself ("chestnut":
+     * "edible nut of a chestnut tree"), which must not flip the card to recognition
+     * and speak the answer into the example.
      */
     private fun isProduction(question: String, word: String): Boolean {
-        if (word.isBlank()) return false
-        // Newlines must separate words here (normalize() drops them), or the word
-        // line "stance" would fuse with the next line ("stanceWhat…") and never match.
-        val q = " " + normalize(question.replace('\n', ' ')) + " "
-        val w = " " + normalize(word.replace('\n', ' ')) + " "
-        return !q.contains(w)
+        val wordLines = word.lines().map { normalize(it) }.filter { it.isNotEmpty() }
+        if (wordLines.isEmpty()) return false
+        val questionLines = question.lines().map { normalize(it) }.filter { it.isNotEmpty() }
+        return questionLines.windowed(wordLines.size).none { it == wordLines }
     }
 
     /**
@@ -85,16 +105,20 @@ object AudioScript {
      * driver's time; replaying the question is one swipe/word away.
      */
     fun forAnswer(answerText: String, questionText: String = "", word: String = ""): List<Segment> {
-        val production = isProduction(questionText, word)
-        if (questionText.isEmpty()) return render(answerText, production)
+        val answer = plainSpaces(answerText)
+        val question = plainSpaces(questionText)
+        val w = plainSpaces(word)
+        val production = isProduction(question, w)
+        val head = headword(w, production)
+        if (question.isEmpty()) return render(answer, production, head)
 
-        val seen = questionText.lines().mapTo(HashSet()) { normalize(it) }
-        val fresh = answerText.lines()
+        val seen = question.lines().mapTo(HashSet()) { normalize(it) }
+        val fresh = answer.lines()
             .filter { it.isNotBlank() && normalize(it) !in seen }
-        val segments = render(fresh.joinToString("\n"), production)
+        val segments = render(fresh.joinToString("\n"), production, head)
 
         // If everything was redundant, better to repeat than to stay silent.
-        return if (segments.any { it is Segment.Speech }) segments else render(answerText, production)
+        return if (segments.any { it is Segment.Speech }) segments else render(answer, production, head)
     }
 
     private fun normalize(s: String): String = s.lowercase()
@@ -199,7 +223,13 @@ object AudioScript {
         return BARE_TAGS.fold(dotted) { acc, (regex, word) -> regex.replace(acc, word) }
     }
 
-    private fun render(text: String, production: Boolean): List<Segment> {
+    /**
+     * [headword] is the studied word when the card is KNOWN to be recognition:
+     * blanks are then filled from it ([fillFromHeadword]). Null means production,
+     * or a direction that is unknown (no word) and has to be guessed from the
+     * visible words ([restoreInline]).
+     */
+    private fun render(text: String, production: Boolean, headword: String? = null): List<Segment> {
         val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
 
         // Candidate words that might be the hidden word, visible on this side.
@@ -249,18 +279,20 @@ object AudioScript {
             // blanks; on production the word is hidden, so every blank becomes the
             // spoken codeword (never a look-alike like the definition's "stated").
             val tokenValues = tokens.map { it.value }
-            val restored: List<String?> =
-                if (production) List(tokenValues.size) { null }
-                else restoreInline(tokenValues, candidates, lemmas, line)
+            val restored: List<String?> = when {
+                production -> List(tokenValues.size) { null }
+                headword != null -> fillFromHeadword(tokens, line, headword)
+                else -> restoreInline(tokenValues, candidates, lemmas, line)
+            }
             var idx = -1
             val lineBlanks = mutableListOf<String>()
             val rendered = line.replace(BLANK_TOKEN) {
                 idx++
-                restored[idx] ?: run {
+                restored[idx]?.let { keepPunctuation(tokenValues[idx], it) } ?: run {
                     lineBlanks += tokenValues[idx]
                     "$MARK_OPEN$CODEWORD$MARK_CLOSE"
                 }
-            }
+            }.replace(EXTRA_SPACE, " ").replace(SPACE_BEFORE_PUNCTUATION, "$1")
             val expanded = expandAbbreviations(rendered)
             if (lineBlanks.isNotEmpty()) {
                 out += blankEmphasised(expanded)
@@ -283,10 +315,234 @@ object AudioScript {
         return out
     }
 
+    private val EXTRA_SPACE = Regex(" {2,}")
+    private val SPACE_BEFORE_PUNCTUATION = Regex(""" +([.,!?;:])""")
+
+    /** Puts [fill] in place of [token]'s bullets, keeping the punctuation the
+     *  token carries around them ("w••••?" → "weave?"), so the voice still
+     *  hears the question mark / sentence end. */
+    private fun keepPunctuation(token: String, fill: String): String {
+        fun outer(c: Char) = !c.isLetterOrDigit() && c != '•'
+        if (token.all(::outer)) return fill
+        return token.takeWhile(::outer) + fill + token.takeLastWhile(::outer)
+    }
+
+    /** One word of the studied headword; hyphens, apostrophes and a slash between
+     *  digits stay inside it ("either-or", "fool's", "20/20"), since the example
+     *  usually masks such words whole. */
+    private val HEADWORD_UNIT = Regex("""[\p{L}\p{N}]+(?:(?:['’-]|(?<=\p{N})/(?=\p{N}))[\p{L}\p{N}]+)*""")
+
+    /** The same, split at hyphens — for examples that write the compound apart
+     *  ("an ••• of •••• experience" for "out-of-body experience"). */
+    private val HEADWORD_PART = Regex("""[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*""")
+
+    /** The headword's words, minus dictionary tags ("prep. from" → "from"). */
+    private fun headwordUnits(headword: String, unit: Regex): List<String> =
+        unit.findAll(headword)
+            .filterNot { it.value.lowercase() in SPOKEN_ABBREVIATION && headword.getOrNull(it.range.last + 1) == '.' }
+            .map { it.value }
+            .toList()
+
+    /** A headword word that can stand in for a blank, and how well it fits. */
+    private class Fill(val text: String, val score: Int)
+
+    // Alignment scores: how well a blank fits a headword word …
+    private const val FIT_EXACT = 8        // visible letters agree ("st••••" stance)
+    private const val FIT_INFLECTED = 7    // … in an inflected form ("h•••d" honed)
+    private const val FIT_LENGTH = 6       // no letters shown, same length ("•••" cot)
+    private const val FIT_LOOSE = 2        // bullets miscounted ("b•••••thed" betrothed)
+    private const val FIT_WEAK = 0         // only the first letter agrees ("b•••s" for "burning")
+    // … how well a visible sentence word matches one …
+    private const val SAME_WORD = 4        // "on" / "on", "SIGNED" / "sign"
+    private const val SIMILAR_WORD = 2     // an irregular form one letter off ("came" / "come")
+    // … and what the alternatives cost.
+    private const val UNRESOLVED = -6      // no headword word fits the blank
+    private const val SKIP_MISSING = -4    // a headword word neither masked nor in the sentence
+    private const val REUSE = -2           // the same word masked twice ("a w••••? … a w••••.")
+
+    /**
+     * How [token] could be filled from the headword word [unit] (in the form the
+     * example uses), or null if its visible letters rule the word out.
+     */
+    private fun fit(token: String, unit: String): Fill? {
+        val b = parseBlank(token)
+        if (b.knowns.isEmpty()) {
+            val diff = kotlin.math.abs(unit.length - b.length)
+            return when {
+                diff == 0 -> Fill(unit, FIT_LENGTH)
+                diff <= 1 -> Fill(unit, FIT_LOOSE)
+                else -> null
+            }
+        }
+        if (b.matches(unit)) return Fill(unit, FIT_EXACT)
+        // An inflected spelling only when the blank shows the ending: "h•••d" is
+        // "honed", but "b••••••" (brought) must not become an invented "bringed".
+        val forms = if (b.suffix.isEmpty()) listOf(unit) else listOf(unit) + inflectedForms(unit)
+        forms.firstOrNull { b.matches(it) }?.let { return Fill(it, FIT_INFLECTED) }
+        // Visible stem/ending agree but the bullet count is off: a slip by one,
+        // or a longer inflection behind a clearly shown stem ("rec••••••d" for
+        // "reciprocated").
+        val loose = forms
+            .filter {
+                it.startsWith(b.prefix, ignoreCase = true) && it.endsWith(b.suffix, ignoreCase = true) &&
+                    it.length >= b.prefix.length + b.suffix.length
+            }
+            .minByOrNull { kotlin.math.abs(it.length - b.length) }
+        if (loose != null && (kotlin.math.abs(loose.length - b.length) <= 1 || b.prefix.length >= 3)) {
+            return Fill(loose, FIT_LOOSE)
+        }
+        // Last resort: the shown first letters are the word's, the form isn't
+        // ("the money b•••s a hole" → "burning") — still better than no word.
+        if (b.prefix.isNotEmpty() && unit.startsWith(b.prefix, ignoreCase = true)) return Fill(unit, FIT_WEAK)
+        return null
+    }
+
+    /** How strongly the visible sentence word [seen] is the headword word [unit]. */
+    private fun wordMatch(seen: String, unit: String): Int {
+        val v = seen.lowercase()
+        val u = unit.lowercase()
+        if (v == u || inflectedForms(u).any { it.equals(v, ignoreCase = true) }) return SAME_WORD
+        val maxEdits = if (u.length <= 4) 1 else 2
+        if (v.length >= 2 && v[0] == u[0] && editDistance(v, u) <= maxEdits) return SIMILAR_WORD
+        return 0
+    }
+
+    private fun editDistance(a: String, b: String): Int {
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1)
+            cur[0] = i
+            for (j in 1..b.length) {
+                cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            }
+            prev = cur
+        }
+        return prev[b.length]
+    }
+
+    /**
+     * Recognition side with the studied [headword] known: fills every blank of
+     * [line] from it. Unlike [restoreInline] (which must guess the direction, so
+     * it only trusts matches with hard evidence), here the headword IS the hidden
+     * text, so fully hidden blanks ("•••" → "cot"), inflections ("SN•••ED OFF" →
+     * "Snapped"), miscounted bullets and phrases whose other words are paraphrased
+     * in the sentence can all be filled.
+     *
+     * The headword's words are aligned, in order, against the whole sentence —
+     * its visible words as well as its blanks — and the best-scoring reading
+     * wins. The visible words pin the blanks down: in "management came •••• on
+     * him" ("come down on somebody") "came" takes "come" and "on" takes "on",
+     * so the blank is "down"; in "wasn't •• •• the plan" ("be in on something")
+     * the blanks are "in on", not "be in". A blank no headword word fits (e.g.
+     * "catch-22" masked as "c•••• ••") is replaced, together with the blanks
+     * right next to it, by the whole headword — the learner hears the word in
+     * the sentence rather than the production codeword.
+     */
+    private fun fillFromHeadword(tokens: List<MatchResult>, line: String, headword: String): List<String> {
+        // Compounds split ("••• of ••••" out of body) or whole ("e•••••-••"
+        // either-or): whichever reads the sentence better (split on a tie).
+        val fills = listOf(HEADWORD_PART, HEADWORD_UNIT)
+            .map { alignToSentence(tokens, line, headword, it) }
+            .maxBy { it.first }
+            .second
+
+        val whole = headword.lines().first { it.isNotBlank() }.trim()
+        val adjacent = { i: Int ->
+            i > 0 && line.substring(tokens[i - 1].range.last + 1, tokens[i].range.first).none { it.isLetterOrDigit() }
+        }
+        // Runs of adjacent blanks ("c•••• •• / c•••• •••"): an unfilled blank next
+        // to a filled one is dropped (its neighbour already says the word); a run
+        // with nothing filled says the whole headword once — unless it is a single
+        // blank that is mostly visible letters, i.e. a bullet typed as a dash in
+        // the deck ("25•minute", "2•4"), which is just read as written.
+        val out = MutableList(tokens.size) { fills[it] }
+        var start = 0
+        while (start < tokens.size) {
+            var end = start + 1
+            while (end < tokens.size && adjacent(end)) end++
+            val anyFilled = (start until end).any { fills[it] != null }
+            for (i in start until end) {
+                if (out[i] != null) continue
+                val core = parseBlank(tokens[i].value)
+                out[i] = when {
+                    anyFilled || i > start -> ""
+                    end - start == 1 && core.knowns.size * 2 > core.length ->
+                        tokens[i].value.replace('•', ' ').trim { !it.isLetterOrDigit() }
+                    else -> whole
+                }
+            }
+            start = end
+        }
+        return out.map { it!! }
+    }
+
+    /**
+     * Aligns [headword]'s words (as cut by [unit]) with [line] (see
+     * [fillFromHeadword]): the total score and, per blank, its fill (null: no
+     * headword word fits).
+     */
+    private fun alignToSentence(
+        tokens: List<MatchResult>,
+        line: String,
+        headword: String,
+        unit: Regex,
+    ): Pair<Int, List<String?>> {
+        val units = headwordUnits(headword, unit)
+
+        // The sentence in order: visible words (blank = -1) and blanks (their index).
+        val items = mutableListOf<Pair<String, Int>>()
+        var pos = 0
+        tokens.forEachIndexed { t, m ->
+            unit.findAll(line.substring(pos, m.range.first)).forEach { items += it.value to -1 }
+            items += m.value to t
+            pos = m.range.last + 1
+        }
+        unit.findAll(line.substring(pos)).forEach { items += it.value to -1 }
+
+        val fits = tokens.map { t -> units.map { u -> fit(t.value, u) } }
+        val same = items.map { (text, t) -> units.map { u -> if (t < 0) wordMatch(text, u) else 0 } }
+        val skipCost = IntArray(units.size) { j ->
+            if (units[j].lowercase() in PHRASE_PLACEHOLDER) 0 else SKIP_MISSING
+        }
+
+        // best(s, h): best score for sentence items s.. with headword words h.. still
+        // unplaced, plus the fill chosen for each blank among them (null: none fits).
+        val memo = HashMap<Pair<Int, Int>, Pair<Int, List<String?>>>()
+        fun best(s: Int, h: Int): Pair<Int, List<String?>> {
+            if (s == items.size) return (h until units.size).sumOf { skipCost[it] } to emptyList()
+            memo[s to h]?.let { return it }
+            val t = items[s].second
+            var top: Pair<Int, List<String?>>? = null
+            fun offer(score: Int, fill: String?, s2: Int, h2: Int) {
+                val (rest, fills) = best(s2, h2)
+                val total = score + rest
+                if (top == null || total > top!!.first) {
+                    top = total to (if (s2 > s && t >= 0) listOf(fill) + fills else fills)
+                }
+            }
+            if (t >= 0) {
+                if (h < units.size) fits[t][h]?.let { offer(it.score, it.text, s + 1, h + 1) }
+                (0 until h).mapNotNull { k -> fits[t][k] }.maxByOrNull { it.score }
+                    ?.let { offer(it.score + REUSE, it.text, s + 1, h) }
+                offer(UNRESOLVED, null, s + 1, h)
+            } else {
+                if (h < units.size && same[s][h] > 0) offer(same[s][h], null, s + 1, h + 1)
+                offer(0, null, s + 1, h)   // a sentence word that isn't in the headword
+            }
+            if (h < units.size) offer(skipCost[h], null, s, h + 1)
+            memo[s to h] = top!!
+            return top!!
+        }
+        return best(0, 0)
+    }
+
     /** Dictionary lemma markers that head a phrase but never appear literally
      *  in its example sentence ("be sb out of sth"), so their absence from the
      *  sentence must not veto a restore. */
-    private val PHRASE_PLACEHOLDER = setOf("be", "sb", "sth", "one", "ones", "oneself", "your", "yours")
+    private val PHRASE_PLACEHOLDER = setOf(
+        "be", "sb", "sth", "one", "ones", "one's", "oneself", "your", "yours", "yourself",
+        "somebody", "somebody's", "someone", "someone's", "something", "somewhere",
+    )
 
     /**
      * Restores every blank token in one example line.
@@ -480,30 +736,55 @@ object AudioScript {
     }
 
     /** Inflectional endings tried on a headword to match an example's conjugation. */
-    private val INFLECTION_ENDINGS = listOf("s", "es", "d", "ed", "ing", "ies", "ied", "er", "est")
+    // No "ies"/"ied": the y→i stem plus "es"/"ed" already spells "carries"/"carried",
+    // and on any other word they only invent look-alikes — "Snapied" fits
+    // "SN•••ED" as well as "Snapped" does, and that ambiguity blocked the restore.
+    // "ly" makes adverbs ("d•••fully" dutifully, "happily").
+    private val INFLECTION_ENDINGS = listOf("s", "es", "d", "ed", "ing", "er", "est", "ly")
 
     /**
      * Every regular inflected spelling of [lemma]: each ending in
      * [INFLECTION_ENDINGS] applied plain ("walk"→"walking"), with a dropped silent
      * final e ("hone"→"honing", "proscribe"→"proscribed"), with a doubled final
-     * consonant ("run"→"running"), and with y→i ("carry"→"carried"). Generated
+     * consonant after a single short vowel ("run"→"running", "snap"→"snapped" —
+     * never "head"→"headdes" or "bring"→"bringgs", junk that can shadow the
+     * real match), and with y→i ("carry"→"carried"). Generated
      * from a fixed ending set rather than the blank's revealed tail, because that
      * tail can include stem letters ("••••••ibed" shows the "ib" of proscribe, not
      * just the "-d"). Over-generates on purpose — the caller keeps only a form that
      * exactly fits the blank.
      */
     private fun inflectedForms(lemma: String): List<String> {
-        val dropE = if (lemma.endsWith("e", ignoreCase = true)) lemma.dropLast(1) else null
-        val yToI = if (lemma.length >= 2 && lemma.endsWith("y", ignoreCase = true)) lemma.dropLast(1) + "i" else null
-        val doubled = if (lemma.length >= 3) lemma + lemma.last() else null
+        val lower = lemma.lowercase()
+        val dropE = if (lower.endsWith("e")) lemma.dropLast(1) else null
+        // y → i after a consonant, listed first ("shied", not "shyed"), for every
+        // ending but -s/-ing ("carries" comes from -es, "carrying" is plain);
+        // after a vowel only for the -d past ("laid", "paid").
+        val yStem = if (lower.length >= 2 && lower.endsWith("y")) lemma.dropLast(1) + "i" else null
+        val consonantY = yStem != null && lower[lower.length - 2] !in "aeiou"
+        val doubled = if (endsConsonantVowelConsonant(lower)) lemma + lemma.last() else null
         val forms = mutableListOf<String>()
         for (e in INFLECTION_ENDINGS) {
+            if (yStem != null && (if (consonantY) e != "s" && e != "ing" else e == "d")) forms += yStem + e
             forms += lemma + e
-            dropE?.let { forms += it + e }
-            yToI?.let { forms += it + e }
-            doubled?.let { forms += it + e }
+            // The stem changes only before a vowel: "honed" but not "hond" (a junk
+            // "reciprocatd" beat "reciprocated" to a blank).
+            if (e[0] in "aeiou") {
+                dropE?.let { forms += it + e }
+                doubled?.let { forms += it + e }
+            }
         }
         return forms.distinct()
+    }
+
+    /** "snap", "run", "acquit": the shape whose final consonant doubles before an
+     *  ending ("u" after "q" is a consonant). */
+    private fun endsConsonantVowelConsonant(word: String): Boolean {
+        if (word.length < 3) return false
+        val w = word.lowercase()
+        fun vowel(i: Int) = w[i] in "aeiou" && !(w[i] == 'u' && i > 0 && w[i - 1] == 'q')
+        val n = w.length
+        return w[n - 1].isLetter() && w[n - 1] !in "wxy" && !vowel(n - 1) && vowel(n - 2) && !vowel(n - 3)
     }
 
     /** "m••e" → "4 letter word starting with M and ending with E". */

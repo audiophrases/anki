@@ -238,10 +238,11 @@ object AnkiDroidApi {
         return context.contentResolver.update(noteUri, cv, null, null) > 0
     }
 
-    /** Re-reads a card's rendered question/answer (e.g. after editing its note). */
+    /** Re-reads a card's rendered question/answer and studied word (e.g. after
+     *  editing its note — an edited word field changes the direction check). */
     fun reloadCard(context: Context, card: DueCard): DueCard {
         val (q, a) = cardText(context, card.noteId, card.ord)
-        return card.copy(question = q, answer = a)
+        return card.copy(question = q, answer = a, word = studiedWord(context, card.noteId))
     }
 
     // ---- test-deck seeding (dev only) ----
