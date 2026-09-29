@@ -104,9 +104,12 @@ class AudioScriptTest {
     @Test fun productionBlankPausesBeforeButNotAfter() {
         val segments = productionSegments("hone", "sharpen", "The bone had been h${blanks(3)}d to a point.", "h${blanks(3)}")
         val i = segments.indexOfFirst { it is Segment.Speech && it.text == "blank" }
-        assertTrue(segments[i - 1] is Segment.Pause)
-        assertTrue((segments[i] as Segment.Speech).ssml!!.contains("rate='-10%'"))
-        // The sentence carries straight on, skipping the clip's warm-up lead-in.
+        // Only a short beat before the blank: mid-sentence, no clip replays its warm-up lead-in.
+        assertEquals(Segment.Pause(100), segments[i - 1])
+        val blank = segments[i] as Segment.Speech
+        assertFalse(blank.leadIn)
+        assertTrue(blank.ssml!!.contains("rate='-10%'"))
+        // The sentence carries straight on after it.
         assertEquals(Segment.Speech("to a point.", leadIn = false), segments[i + 1])
     }
 

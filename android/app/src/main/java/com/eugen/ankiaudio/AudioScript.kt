@@ -7,8 +7,8 @@ sealed interface Segment {
      * and logging); [ssml] is an optional pre-built SSML inner fragment for the
      * Edge engine — set when a line needs prosody (e.g. a production blank that
      * should be slowed). [leadIn] is false when the utterance carries straight
-     * on from the one before (the rest of a sentence after a blank), so the
-     * player skips the clip's warm-up silence instead of leaving a gap.
+     * on mid-line (a blank, or the rest of the sentence after it), so the player
+     * skips the clip's warm-up silence instead of leaving a gap.
      */
     data class Speech(val text: String, val ssml: String? = null, val leadIn: Boolean = true) : Segment
     data class Bleep(val durationMs: Int = 500) : Segment
@@ -144,11 +144,12 @@ object AudioScript {
      * Splits a rendered line whose codewords are [MARK_OPEN]…[MARK_CLOSE]-marked
      * into segments that make each production blank stand out: the surrounding
      * text plays normally, and every blank becomes its own utterance — slowed via
-     * SSML after a short [BLANK_PAUSE_MS] silence — so the learner clearly hears
+     * SSML after a short [BLANK_PAUSE_MS] beat — so the learner clearly hears
      * *where* the missing word goes instead of it flashing by. After the blank
-     * the sentence carries straight on: no pause, and the next clip skips its
-     * warm-up lead-in ([Segment.Speech.leadIn]); a blank right after a blank
-     * ("blank blank") follows on the same way.
+     * the sentence carries straight on, with no pause; a blank right after a
+     * blank ("blank blank") follows on the same way. Only the line's first clip
+     * keeps its warm-up lead-in ([Segment.Speech.leadIn]): mid-line the output
+     * is still warm, so the lead-in would only stretch those pauses.
      *
      * The blank's SSML is a whole-utterance `<prosody pitch rate volume>` wrapper,
      * the only shape Edge's read-aloud endpoint accepts (the same one edge-tts
@@ -157,20 +158,23 @@ object AudioScript {
      */
     private fun blankEmphasised(marked: String): List<Segment> {
         val out = mutableListOf<Segment>()
+        var spoke = false // a clip of this line has played: the output is warm
         var afterBlank = false
         var i = 0
         while (i < marked.length) {
             val open = marked.indexOf(MARK_OPEN, i)
             val text = marked.substring(i, if (open < 0) marked.length else open).trim()
             if (text.isNotEmpty()) {
-                out += Segment.Speech(text, leadIn = !afterBlank)
+                out += Segment.Speech(text, leadIn = !spoke)
+                spoke = true
                 afterBlank = false
             }
             if (open < 0) break
             val close = marked.indexOf(MARK_CLOSE, open)
             val word = marked.substring(open + MARK_OPEN.length, close)
             if (!afterBlank) out += Segment.Pause(BLANK_PAUSE_MS)
-            out += Segment.Speech(word, ssml = slowProsody(word), leadIn = !afterBlank)
+            out += Segment.Speech(word, ssml = slowProsody(word), leadIn = !spoke)
+            spoke = true
             afterBlank = true
             i = close + MARK_CLOSE.length
         }
