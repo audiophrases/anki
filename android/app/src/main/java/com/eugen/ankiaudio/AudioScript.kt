@@ -718,8 +718,21 @@ object AudioScript {
         // production card the headword is hidden, so there are no lemmas and the
         // blank stays the spoken codeword.
         run {
-            val inflected = lemmas.flatMap { inflectedForms(it) }.filter { b.matches(it) }
-            if (inflected.distinctBy { it.lowercase() }.size == 1) return inflected.first()
+            val forms = lemmas.flatMap { inflectedForms(it) }
+            val exact = forms.filter { b.matches(it) }.distinctBy { it.lowercase() }
+            if (exact.size == 1) return exact.first()
+            // Some notes mis-count the bullets ("f•••cked" for the 9-letter
+            // "frolicked"): if the shown stem AND ending still pin one inflected
+            // form, within a letter of the blank's length, accept it. Both ends
+            // must be visible so the definition's words can't sneak in.
+            if (b.prefix.isNotEmpty() && b.suffix.isNotEmpty()) {
+                val loose = forms.filter {
+                    it.startsWith(b.prefix, ignoreCase = true) &&
+                        it.endsWith(b.suffix, ignoreCase = true) &&
+                        kotlin.math.abs(it.length - b.length) <= 1
+                }.distinctBy { it.lowercase() }
+                if (loose.size == 1) return loose.first()
+            }
         }
 
         // (3) Shown stem and ending around a hidden middle (e.g. "f••b••••••e"),
@@ -762,7 +775,11 @@ object AudioScript {
         // after a vowel only for the -d past ("laid", "paid").
         val yStem = if (lower.length >= 2 && lower.endsWith("y")) lemma.dropLast(1) + "i" else null
         val consonantY = yStem != null && lower[lower.length - 2] !in "aeiou"
-        val doubled = if (endsConsonantVowelConsonant(lower)) lemma + lemma.last() else null
+        // A final hard "c" takes a "k" instead of doubling: frolic→frolicked,
+        // frolicking; panic→panicked; mimic→mimicking (never a junk "frolicced",
+        // which fits the same blanks as the real form).
+        val ckStem = if (lower.endsWith("c")) lemma + "k" else null
+        val doubled = if (ckStem == null && endsConsonantVowelConsonant(lower)) lemma + lemma.last() else null
         val forms = mutableListOf<String>()
         for (e in INFLECTION_ENDINGS) {
             if (yStem != null && (if (consonantY) e != "s" && e != "ing" else e == "d")) forms += yStem + e
@@ -772,6 +789,7 @@ object AudioScript {
             if (e[0] in "aeiou") {
                 dropE?.let { forms += it + e }
                 doubled?.let { forms += it + e }
+                ckStem?.let { forms += it + e }
             }
         }
         return forms.distinct()

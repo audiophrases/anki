@@ -96,4 +96,73 @@ class AudioScriptTest {
         )
         assertTrue(said, said.contains("She roasted a | blank | over the fire."))
     }
+
+    // ---- the "-c" → "-ck" inflection family (frolic → frolicked / frolicking) ----
+
+    /** Recognition side: the blanked example is restored from the visible word,
+     *  including the c→ck spelling change — and the deck's off-by-one bullet
+     *  count ("f•••cked" for the 9-letter "frolicked") is tolerated. */
+    @Test
+    fun frolicked_restoredOnRecognition() {
+        val question = """
+            frolic
+            play actively, happily
+            Lambs f•••cked in the next field.
+            f•••c
+        """.trimIndent()
+
+        val text = spoken(AudioScript.forQuestion(question, word = "frolic"))
+
+        assertTrue(text, text.contains("Lambs frolicked in the next field."))
+        // No leftover codeword, and no spurious letter-hint on the recognition side.
+        assertFalse(text, text.contains("blank"))
+        assertFalse(text, text.contains("letter word"))
+    }
+
+    /** Direction unknown (no studied word): the inline restore still finds the
+     *  c→ck form behind the miscounted blank. */
+    @Test
+    fun frolicked_restoredWithoutKnownWord() {
+        val question = """
+            frolic
+            play actively, happily
+            Lambs f•••cked in the next field.
+            f•••c
+        """.trimIndent()
+
+        val text = spoken(AudioScript.forQuestion(question))
+
+        assertTrue(text, text.contains("Lambs frolicked in the next field."))
+    }
+
+    /** The same rule with a correctly-counted blank ("p••icked" = panicked). */
+    @Test
+    fun panicked_restoredWithExactBullets() {
+        val question = """
+            panic
+            feel sudden fear
+            They p••icked and ran.
+        """.trimIndent()
+
+        val text = spoken(AudioScript.forQuestion(question, word = "panic"))
+
+        assertTrue(text, text.contains("They panicked and ran."))
+    }
+
+    /** Production side (word hidden): the sentence keeps the codeword rather than
+     *  leaking the answer via the c→ck inflection of a definition word. */
+    @Test
+    fun frolicked_stillBlankOnProduction() {
+        // No visible "frolic": the word field is hidden on the production side.
+        val question = """
+            play actively, happily
+            Lambs f•••cked in the next field.
+            f•••c
+        """.trimIndent()
+
+        val text = spoken(AudioScript.forQuestion(question, word = "frolic"))
+
+        assertFalse(text, text.contains("frolicked"))
+        assertTrue(text, text.contains("blank"))
+    }
 }
