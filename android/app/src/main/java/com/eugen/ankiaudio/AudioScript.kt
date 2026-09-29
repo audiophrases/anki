@@ -6,9 +6,11 @@ sealed interface Segment {
      * Spoken text. [text] is the plain form (used for the platform-TTS fallback
      * and logging); [ssml] is an optional pre-built SSML inner fragment for the
      * Edge engine — set when a line needs prosody (e.g. a production blank that
-     * should be slowed and bracketed with pauses).
+     * should be slowed). [leadIn] is false when the utterance carries straight
+     * on from the one before (the rest of a sentence after a blank), so the
+     * player skips the clip's warm-up silence instead of leaving a gap.
      */
-    data class Speech(val text: String, val ssml: String? = null) : Segment
+    data class Speech(val text: String, val ssml: String? = null, val leadIn: Boolean = true) : Segment
     data class Bleep(val durationMs: Int = 500) : Segment
     data class Pause(val durationMs: Long) : Segment
 }
@@ -134,37 +136,42 @@ object AudioScript {
     private const val MARK_OPEN = "\uE000"
     private const val MARK_CLOSE = "\uE001"
 
-    /** How much Edge slows the spoken blank, and the silence bracketing it. */
-    private const val BLANK_RATE = "-20%"
+    /** How much Edge slows the spoken blank, and the silence before it. */
+    private const val BLANK_RATE = "-10%"
     private const val BLANK_PAUSE_MS = 100L
 
     /**
      * Splits a rendered line whose codewords are [MARK_OPEN]…[MARK_CLOSE]-marked
      * into segments that make each production blank stand out: the surrounding
      * text plays normally, and every blank becomes its own utterance — slowed via
-     * SSML and bracketed by short [BLANK_PAUSE_MS] silences — so the learner
-     * clearly hears *where* the missing word goes instead of it flashing by.
+     * SSML after a short [BLANK_PAUSE_MS] silence — so the learner clearly hears
+     * *where* the missing word goes instead of it flashing by. After the blank
+     * the sentence carries straight on: no pause, and the next clip skips its
+     * warm-up lead-in ([Segment.Speech.leadIn]); a blank right after a blank
+     * ("blank blank") follows on the same way.
      *
      * The blank's SSML is a whole-utterance `<prosody pitch rate volume>` wrapper,
      * the only shape Edge's read-aloud endpoint accepts (the same one edge-tts
-     * uses); the pauses are real silence segments, not `<break>` (which Edge
+     * uses); the pause is a real silence segment, not `<break>` (which Edge
      * rejects). The platform-TTS fallback ignores the SSML and reads "blank".
      */
     private fun blankEmphasised(marked: String): List<Segment> {
         val out = mutableListOf<Segment>()
+        var afterBlank = false
         var i = 0
         while (i < marked.length) {
             val open = marked.indexOf(MARK_OPEN, i)
-            if (open < 0) {
-                marked.substring(i).trim().takeIf { it.isNotEmpty() }?.let { out += Segment.Speech(it) }
-                break
+            val text = marked.substring(i, if (open < 0) marked.length else open).trim()
+            if (text.isNotEmpty()) {
+                out += Segment.Speech(text, leadIn = !afterBlank)
+                afterBlank = false
             }
-            marked.substring(i, open).trim().takeIf { it.isNotEmpty() }?.let { out += Segment.Speech(it) }
+            if (open < 0) break
             val close = marked.indexOf(MARK_CLOSE, open)
             val word = marked.substring(open + MARK_OPEN.length, close)
-            out += Segment.Pause(BLANK_PAUSE_MS)
-            out += Segment.Speech(word, ssml = slowProsody(word))
-            out += Segment.Pause(BLANK_PAUSE_MS)
+            if (!afterBlank) out += Segment.Pause(BLANK_PAUSE_MS)
+            out += Segment.Speech(word, ssml = slowProsody(word), leadIn = !afterBlank)
+            afterBlank = true
             i = close + MARK_CLOSE.length
         }
         return out

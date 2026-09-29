@@ -64,6 +64,19 @@ object EdgeTts {
         ByteArray(frames * SILENT_FRAME.size) { SILENT_FRAME[it % SILENT_FRAME.size] }
     }
 
+    /**
+     * Size in bytes of the lead-in at the start of [file], or 0 if it doesn't
+     * start with one (a clip cached before the lead-in existed), so a player can
+     * skip it: mid-sentence the output is still warm and the lead-in would only
+     * be an audible gap. Only ever our silent frames are skipped.
+     */
+    fun leadInLength(file: File): Long {
+        val head = ByteArray(leadInSilence.size)
+        val read = runCatching { file.inputStream().use { it.readNBytes(head, 0, head.size) } }
+            .getOrDefault(0)
+        return if (read == head.size && head.contentEquals(leadInSilence)) head.size.toLong() else 0L
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

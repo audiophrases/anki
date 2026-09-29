@@ -8,6 +8,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.io.File
+import java.io.FileInputStream
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
@@ -56,7 +57,7 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
                 for ((i, seg) in segments.withIndex()) {
                     Log.i(TAG, "segment $i: $seg")
                     when (seg) {
-                        is Segment.Speech -> speakText(seg.text, seg.ssml)
+                        is Segment.Speech -> speakText(seg.text, seg.ssml, seg.leadIn)
                         is Segment.Bleep -> bleep(seg.durationMs)
                         is Segment.Pause -> delay(seg.durationMs)
                     }
@@ -87,7 +88,7 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         fallbackTts.shutdown()
     }
 
-    private suspend fun speakText(text: String, ssml: String? = null) {
+    private suspend fun speakText(text: String, ssml: String? = null, leadIn: Boolean = true) {
         val file: File? = try {
             // Read the chosen voice per-utterance so changing it on the start
             // screen takes effect on the next card without a restart.
@@ -99,13 +100,20 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
             Log.w(TAG, "Edge TTS failed (${e.message}); using platform TTS")
             null
         }
-        if (file != null) playFile(file) else speakWithPlatformTts(text)
+        if (file != null) playFile(file, leadIn) else speakWithPlatformTts(text)
     }
 
-    private suspend fun playFile(file: File) {
+    private suspend fun playFile(file: File, leadIn: Boolean) {
         val mp = withContext(Dispatchers.IO) {
             MediaPlayer().apply {
-                setDataSource(file.path)
+                // Mid-sentence the output is still warm: start after the clip's
+                // warm-up lead-in so the sentence carries straight on.
+                val skip = if (leadIn) 0L else EdgeTts.leadInLength(file)
+                if (skip > 0) {
+                    FileInputStream(file).use { setDataSource(it.fd, skip, file.length() - skip) }
+                } else {
+                    setDataSource(file.path)
+                }
                 prepare()
             }
         }

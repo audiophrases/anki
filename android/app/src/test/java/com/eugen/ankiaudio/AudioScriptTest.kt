@@ -97,6 +97,30 @@ class AudioScriptTest {
         assertTrue(said, said.contains("She roasted a | blank | over the fire."))
     }
 
+    /** The segments of a production card's question, as the speaker plays them. */
+    private fun productionSegments(word: String, definition: String, example: String, hint: String) =
+        AudioScript.forQuestion("$definition\n\n$example\n\n$hint", word)
+
+    @Test fun productionBlankPausesBeforeButNotAfter() {
+        val segments = productionSegments("hone", "sharpen", "The bone had been h${blanks(3)}d to a point.", "h${blanks(3)}")
+        val i = segments.indexOfFirst { it is Segment.Speech && it.text == "blank" }
+        assertTrue(segments[i - 1] is Segment.Pause)
+        assertTrue((segments[i] as Segment.Speech).ssml!!.contains("rate='-10%'"))
+        // The sentence carries straight on, skipping the clip's warm-up lead-in.
+        assertEquals(Segment.Speech("to a point.", leadIn = false), segments[i + 1])
+    }
+
+    @Test fun productionAdjacentBlanksFollowOnWithoutPauses() {
+        val segments = productionSegments(
+            "be in on something", "involved in a secret",
+            "She wasn't ${blanks(2)} ${blanks(2)} the plan.", "${blanks(2)} ${blanks(2)}",
+        )
+        val i = segments.indexOfFirst { it is Segment.Speech && it.text == "blank" }
+        assertTrue(segments[i - 1] is Segment.Pause)
+        assertEquals(Segment.Speech("blank", ssml = (segments[i] as Segment.Speech).ssml, leadIn = false), segments[i + 1])
+        assertEquals(Segment.Speech("the plan.", leadIn = false), segments[i + 2])
+    }
+
     // ---- the "-c" → "-ck" inflection family (frolic → frolicked / frolicking) ----
 
     /** Recognition side: the blanked example is restored from the visible word,
