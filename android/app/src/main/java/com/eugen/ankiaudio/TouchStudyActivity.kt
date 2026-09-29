@@ -30,46 +30,55 @@ import kotlinx.coroutines.launch
  *
  *   Question phase:  tap anywhere = reveal · swipe down = replay
  *   Answer phase:    tap BOTTOM half = Good   (double-tap = Easy)
- *                    tap TOP half    = Again  (double-tap = Hard)
+ *                    tap TOP half    = Hard   (double-tap = Again)
  *   Any phase:       swipe up = edit this card in the bright editor · two-finger
- *                    tap = Undo · three-finger tap = show the gesture chart ·
+ *                    tap = Undo · three-finger tap = lights on/off ·
  *                    long-press = bookmark-tag the card (tag "audio-bookmark",
  *                    for later desktop editing)
  *
- * The gesture chart is on demand only (three-finger tap, or "gestures" in car
- * mode) — never forced at the start of a session, so a user who knows the
- * gestures never sees it. It is a visual overlay (colour-coded tap zones and a
- * legend) that briefly restores screen brightness, then dims back on dismiss;
- * card audio keeps playing behind it.
+ * Lights off (bed and car mode's start): black, with the backlight forced to
+ * minimum — the panel is LCD, so black alone still glows. Lights on (couch
+ * mode's start, [EXTRA_LIGHTS]): the [LitCardView] shows the card being spoken
+ * and the controls reminder at the user's normal brightness, and every gesture
+ * keeps working through it. A three-finger tap switches between the two (car
+ * mode also takes "bright" / "dark"), so a user who knows the gestures never
+ * has to look.
  *
  * Every action answers back with haptics + speech, so eyes stay closed.
  * Volume keys stay ordinary volume keys here — touch has enough inputs.
  *
  * Car mode ([EXTRA_VOICE]) runs this same surface with spoken commands on
  * top of the gestures, so the driver can keep both hands on the wheel but
- * still tap blindly when voice is awkward. The backlight is forced to
- * minimum either way — the panel is LCD, so black alone still glows.
+ * still tap blindly when voice is awkward.
  */
 class TouchStudyActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_DECK = "deck"
         const val EXTRA_VOICE = "voice"
+        /** Start with the lights on (couch mode) instead of the dark surface. */
+        const val EXTRA_LIGHTS = "lights"
         const val BOOKMARK_TAG = "audio-bookmark"
 
-        /** Backlight for eyes-free study vs. while the gesture chart is up. */
+        /** Backlight for eyes-free study (lights off). */
         private const val DIM_BRIGHTNESS = 0.01f
-        private const val CHART_BRIGHTNESS = 0.6f
 
-        /** Defer to the system/user brightness while the note editor is open. */
-        private const val EDIT_BRIGHTNESS = -1f // WindowManager.BRIGHTNESS_OVERRIDE_NONE
+        /** Lights on and the note editor defer to the system/user brightness. */
+        private const val NORMAL_BRIGHTNESS = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
     }
 
     private lateinit var speaker: CardSpeaker
     private lateinit var engine: StudyEngine
     private lateinit var root: FrameLayout
     private lateinit var stateView: TextView
+    private lateinit var litView: LitCardView
     private var voice: VoiceControl? = null
+
+    /** Whether the lit card view is showing (else the dark, dimmed surface). */
+    private var lightsOn = false
+
+    /** The engine's latest state line, shown in the lit view when no card is up. */
+    private var lastStatus = "…"
 
     /** Multi-finger handling: suppress single-finger gestures around it. */
     private var twoFingerDownAt = 0L
@@ -77,9 +86,6 @@ class TouchStudyActivity : AppCompatActivity() {
     private var fourFingerDownAt = 0L
     private var suppressSingleUntil = 0L
     private var exiting = false
-
-    /** The on-demand gesture chart overlay, non-null only while it is showing. */
-    private var chartOverlay: View? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +98,7 @@ class TouchStudyActivity : AppCompatActivity() {
             setPadding(48, 0, 48, 0)
             text = "…"
         }
+        litView = LitCardView(this, voice = intent.getBooleanExtra(EXTRA_VOICE, false))
         root = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(
@@ -102,11 +109,17 @@ class TouchStudyActivity : AppCompatActivity() {
                     Gravity.CENTER
                 )
             )
+            addView(
+                litView,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
         }
         setContentView(root)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setBrightness(DIM_BRIGHTNESS)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, root).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -115,7 +128,8 @@ class TouchStudyActivity : AppCompatActivity() {
         }
 
         speaker = CardSpeaker(this, lifecycleScope)
-        engine = StudyEngine(this, speaker) { msg -> runOnUiThread { stateView.text = msg } }
+        engine = StudyEngine(this, speaker) { msg -> runOnUiThread { onEngineState(msg) } }
+        setLights(intent.getBooleanExtra(EXTRA_LIGHTS, false))
         engine.onFinished = {
             lifecycleScope.launch {
                 delay(5000) // let the closing speech play out
@@ -193,7 +207,7 @@ class TouchStudyActivity : AppCompatActivity() {
                         suppressSingleUntil = fourFingerDownAt + 900
                     }
                     ev.pointerCount == 3 -> {
-                        // Three fingers: speak the gesture reminder on demand.
+                        // Three fingers: lights on/off (card + controls reminder).
                         threeFingerDownAt = SystemClock.elapsedRealtime()
                         twoFingerDownAt = 0
                         suppressSingleUntil = threeFingerDownAt + 800
@@ -212,7 +226,7 @@ class TouchStudyActivity : AppCompatActivity() {
                         }
                         threeFingerDownAt > 0 && now - threeFingerDownAt < 500 -> {
                             haptic(HapticFeedbackConstants.CONFIRM)
-                            showGestureChart()
+                            setLights(!lightsOn)
                         }
                         twoFingerDownAt > 0 && now - twoFingerDownAt < 450 -> {
                             haptic(HapticFeedbackConstants.CONFIRM)
@@ -266,7 +280,9 @@ class TouchStudyActivity : AppCompatActivity() {
                     if (engine.answerShown) engine.rate(AnkiDroidApi.EASE_AGAIN)
                 VoiceControl.Command.UNDO -> engine.undo()
                 VoiceControl.Command.BOOKMARK -> engine.bookmark(BOOKMARK_TAG)
-                VoiceControl.Command.GESTURES -> showGestureChart()
+                // The lit view lists the commands and gestures.
+                VoiceControl.Command.GESTURES, VoiceControl.Command.BRIGHT -> setLights(true)
+                VoiceControl.Command.DARK -> setLights(false)
                 VoiceControl.Command.STOP -> stopAndExit()
             }
         }
@@ -284,48 +300,36 @@ class TouchStudyActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * On-demand visual gesture chart (three-finger tap, or "gestures" in car
-     * mode). A full-screen overlay of colour-coded tap zones — red top half =
-     * Again/Hard, green bottom half = Good/Easy, mirroring where you actually
-     * tap — plus a legend of the whole-screen gestures. Restores readable
-     * brightness while up; a tap anywhere dismisses it and dims back down.
-     * Purely visual, so the card audio keeps playing behind it.
-     */
-    private fun showGestureChart() {
-        if (chartOverlay != null) return
-        val overlay = GestureChart.build(this) { hideGestureChart() }
-        root.addView(
-            overlay,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-        chartOverlay = overlay
-        setBrightness(CHART_BRIGHTNESS)
+    private fun onEngineState(msg: String) {
+        lastStatus = msg
+        stateView.text = msg
+        if (lightsOn) litView.show(engine.current, engine.answerShown, engine.deck?.name, lastStatus)
     }
 
-    private fun hideGestureChart() {
-        val overlay = chartOverlay ?: return
-        chartOverlay = null
-        root.removeView(overlay)
-        setBrightness(DIM_BRIGHTNESS)
+    /**
+     * Lights on: the [LitCardView] (card being spoken + controls reminder) at the
+     * user's normal brightness. Lights off: the black surface, backlight at
+     * minimum. Purely visual — the audio and every gesture carry on unchanged.
+     */
+    private fun setLights(on: Boolean) {
+        lightsOn = on
+        litView.visibility = if (on) View.VISIBLE else View.GONE
+        if (on) litView.show(engine.current, engine.answerShown, engine.deck?.name, lastStatus)
+        setBrightness(if (on) NORMAL_BRIGHTNESS else DIM_BRIGHTNESS)
     }
 
     /**
      * Swipe up: pause the audio (and the car-mode mic), restore normal
      * brightness and open the shared [NoteEditDialog] on the current card. On
-     * dismiss we dim back down, resume, and — if it was saved — replay the
-     * updated card. Same surface throughout, so we return to whichever mode
-     * (bed or car) we were in.
+     * dismiss we restore the lights as they were, resume, and — if it was
+     * saved — replay the updated card. Same surface throughout, so we return to
+     * whichever mode (bed, couch or car) we were in.
      */
     private fun editCurrentNote() {
         val card = engine.current ?: return
-        if (chartOverlay != null) hideGestureChart() // don't stack the editor under the chart
         speaker.stop()
         voice?.pause()
-        setBrightness(EDIT_BRIGHTNESS)
+        setBrightness(NORMAL_BRIGHTNESS)
         NoteEditDialog.show(
             context = this,
             engine = engine,
@@ -337,7 +341,7 @@ class TouchStudyActivity : AppCompatActivity() {
     }
 
     private fun afterEdit(saved: Boolean) {
-        setBrightness(DIM_BRIGHTNESS)
+        setLights(lightsOn)
         voice?.resume()
         if (saved) engine.replay() // re-speak the edited card
     }

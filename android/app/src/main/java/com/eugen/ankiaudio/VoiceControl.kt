@@ -25,7 +25,7 @@ class VoiceControl(
     private val onCommand: (Command) -> Unit,
 ) {
 
-    enum class Command { REVEAL, REPEAT, GOOD, EASY, HARD, AGAIN, UNDO, BOOKMARK, GESTURES, STOP }
+    enum class Command { REVEAL, REPEAT, GOOD, EASY, HARD, AGAIN, UNDO, BOOKMARK, GESTURES, BRIGHT, DARK, STOP }
 
     private companion object {
         const val TAG = "VoiceControl"
@@ -65,6 +65,13 @@ class VoiceControl(
             "gestures" to Command.GESTURES,
             "help" to Command.GESTURES,
             "commands" to Command.GESTURES,
+            // Lights on/off. Not "lights on/off": the latest command word wins,
+            // so "lights off" would read as "lights".
+            "bright" to Command.BRIGHT,
+            "brighter" to Command.BRIGHT,
+            "dark" to Command.DARK,
+            "darker" to Command.DARK,
+            "dim" to Command.DARK,
             "stop" to Command.STOP,
             "finish" to Command.STOP,
         )

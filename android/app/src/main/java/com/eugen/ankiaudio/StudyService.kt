@@ -186,6 +186,8 @@ class StudyService : Service() {
                 VoiceControl.Command.BOOKMARK ->
                     engine.bookmark(TouchStudyActivity.BOOKMARK_TAG)
                 VoiceControl.Command.GESTURES -> speakControlReminder()
+                // Screen-off session: no screen to light.
+                VoiceControl.Command.BRIGHT, VoiceControl.Command.DARK -> Unit
                 VoiceControl.Command.STOP -> {
                     engine.stop()
                     speaker.speak(listOf(Segment.Speech("Study stopped.")))

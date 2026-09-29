@@ -32,15 +32,30 @@ Any time, **anywhere on the screen** (top/bottom zones don't apply to these):
 | Gesture | Action |
 | --- | --- |
 | **Two-finger tap** | Undo last rating |
+| **Three-finger tap** | Lights on/off: the card being read + this cheat sheet on screen (see Couch mode) |
 | **Four-finger tap** | Stop study & return to the start menu (saves the pending rating, confirms "Study stopped.") |
 | **Long-press** | Bookmark card (tag `audio-bookmark` — find later on desktop with `tag:audio-bookmark`) |
 | **Swipe down** | Replay question (also works after reveal) |
+| **Swipe up** | Edit this card (opens the editor at normal brightness, then returns to the same mode) |
 
 Tip: keep swipes and long-presses away from the very top/bottom screen
 edges — those strips can trigger Android's own status-bar/nav gestures
 (mostly suppressed when the app is pinned).
 
 Volume keys = normal volume here.
+
+## 🛋 Couch mode (lights on — look when you want)
+
+Start: app → pick deck → **🛋 Couch mode (lights on)**. Bed mode with the
+lights on: full screen at your normal brightness, showing the card being read
+(question, then the answer after reveal) and a gesture reminder at the bottom.
+Once the answer is up, the halves are tinted (red top = Hard/Again, green
+bottom = Good/Easy). Nothing on screen is a button: every tap and swipe works
+exactly as in bed mode.
+
+**Three-finger tap** switches the lights off (bed mode's black screen) and on
+again. It works in bed and car mode too, so any session can be lit up for a
+look. Colours follow the phone's light/dark theme.
 
 ## 🚗 Car mode (voice — no hands, no look)
 
@@ -55,10 +70,15 @@ here — turn it up or down any time.
 | **"good"** · **"easy"** · **"hard"** · **"again"** (or "wrong") | Rate the card |
 | **"undo"** | Undo last rating |
 | **"bookmark"** / "mark" | Bookmark card (tag `audio-bookmark`) |
+| **"bright"** / "brighter" | Lights on: card + commands on screen |
+| **"dark"** / "darker" / "dim" | Lights off |
+| **"gestures"** / "help" / "commands" | Lights on (the screen lists the commands and gestures) |
 | **"stop"** / "finish" | End the session |
 
-Every command is confirmed by voice. Ratings only count after the answer
-was revealed; "again/wrong" while the question plays does nothing.
+Every command is confirmed by voice (the lights by the screen itself).
+Ratings only count after the answer was revealed; "again/wrong" while the
+question plays does nothing. Bed-mode gestures work here too, including the
+three-finger lights toggle.
 
 ## 📱 In-app buttons (screen on)
 

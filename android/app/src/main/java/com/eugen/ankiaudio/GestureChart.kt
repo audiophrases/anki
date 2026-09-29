@@ -10,16 +10,14 @@ import android.widget.TextView
 
 /**
  * The visual gesture reference for the eyes-free touch surface: colour-coded
- * rating halves (red top = Again/Hard, green bottom = Good/Easy, mirroring
+ * rating halves (red top = Hard/Again, green bottom = Good/Easy, mirroring
  * where you actually tap) plus a legend of the whole-screen gestures.
  *
- * Built once here and reused in two places so they never drift apart:
- *  - [TouchStudyActivity] overlays it on demand (three-finger tap) over the dim
- *    study surface, briefly restoring brightness.
- *  - [GestureChartActivity] shows it as a normal, full-brightness screen from
- *    the home screen, for looking the gestures up before a session.
+ * Shown by [GestureChartActivity] as a normal, full-brightness screen from the
+ * home screen, for looking the gestures up before a session. During study the
+ * lights-on [LitCardView] carries the same reminder next to the card.
  *
- * A tap anywhere invokes [onDismiss] (dismiss the overlay / finish the screen).
+ * A tap anywhere invokes [onDismiss].
  */
 object GestureChart {
 
@@ -85,7 +83,7 @@ object GestureChart {
                     13f, "#AAFFFFFF", top = 0, bottom = 10),
                 matchWrap()
             )
-            addView(zone("#4A1A1E", "TOP HALF", "Again", "double-tap: Hard"), matchWeight())
+            addView(zone("#4A1A1E", "TOP HALF", "Hard", "double-tap: Again"), matchWeight())
             addView(zone("#12331F", "BOTTOM HALF", "Good", "double-tap: Easy"), matchWeight())
             addView(
                 line("During the question, a tap anywhere reveals the answer",
@@ -98,7 +96,7 @@ object GestureChart {
                         "Swipe down — replay\n" +
                         "Two fingers — undo\n" +
                         "Long-press — bookmark\n" +
-                        "Three fingers — this chart\n" +
+                        "Three fingers — lights on/off (card + this reminder)\n" +
                         "Four fingers — stop",
                     15f, "#DDFFFFFF", top = 0, bottom = 8
                 ).apply { setLineSpacing(dp(5).toFloat(), 1f) },

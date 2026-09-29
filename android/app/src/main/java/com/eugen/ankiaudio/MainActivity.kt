@@ -114,15 +114,17 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, GestureChartActivity::class.java))
         }
         findViewById<Button>(R.id.touchButton).setOnClickListener {
-            lifecycleScope.launch { if (engine.active) engine.stop() }
-            startActivity(
-                Intent(this, TouchStudyActivity::class.java)
-                    .putExtra(TouchStudyActivity.EXTRA_DECK, selectedDeckName())
-            )
+            openTouchSurface()
             status(
                 "Bed mode — tap: reveal/rate · swipe down: replay · swipe up: edit · " +
-                    "two fingers: undo · three fingers: show the gesture chart · " +
-                    "four fingers: stop."
+                    "two fingers: undo · three fingers: lights on/off · four fingers: stop."
+            )
+        }
+        findViewById<Button>(R.id.couchButton).setOnClickListener {
+            openTouchSurface(lights = true)
+            status(
+                "Couch mode — bed mode with the lights on: the card and the gestures on " +
+                    "screen. Three fingers: lights off/on."
             )
         }
         studyButton.setOnClickListener { toggleStudy() }
@@ -292,15 +294,24 @@ class MainActivity : AppCompatActivity() {
 
     /** Car mode: bed mode's dark gesture surface + spoken commands. */
     private fun startCarMode() {
+        openTouchSurface(voice = true)
+        status(
+            "Car mode — speak between playbacks: show · repeat · good · easy · " +
+                "hard · again · undo · bookmark · bright · dark · stop. Bed-mode gestures work too."
+        )
+    }
+
+    /**
+     * The full-screen touch surface ([TouchStudyActivity]): bed mode (dark),
+     * couch mode ([lights] on) or car mode ([voice] commands on top).
+     */
+    private fun openTouchSurface(voice: Boolean = false, lights: Boolean = false) {
         lifecycleScope.launch { if (engine.active) engine.stop() }
         startActivity(
             Intent(this, TouchStudyActivity::class.java)
                 .putExtra(TouchStudyActivity.EXTRA_DECK, selectedDeckName())
-                .putExtra(TouchStudyActivity.EXTRA_VOICE, true)
-        )
-        status(
-            "Car mode — speak between playbacks: show · repeat · good · easy · " +
-                "hard · again · undo · bookmark · gestures · stop. Bed-mode gestures work too."
+                .putExtra(TouchStudyActivity.EXTRA_VOICE, voice)
+                .putExtra(TouchStudyActivity.EXTRA_LIGHTS, lights)
         )
     }
 

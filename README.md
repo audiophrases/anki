@@ -11,7 +11,7 @@ app just supplies the rating.
 
 ## Status
 
-The working app is built through **M3** (touch-zone "bed mode", screen-off
+The working app is built through **M3** (touch-zone "bed mode" and its lit "couch mode", screen-off
 session, volume/voice control, Edge neural TTS with prefetch + cache). The
 complete, buildable Gradle project is in [`android/`](android/) — that is the
 single source of truth that compiles and installs. The `m0`–`m3` folders are

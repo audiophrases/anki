@@ -134,6 +134,19 @@
             android:textSize="18sp" />
 
         <Button
+            android:id="@+id/couchButton"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginBottom="12dp"
+            android:backgroundTint="#EF6C00"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="🛋  Couch mode (lights on)"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
+        <Button
             android:id="@+id/carButton"
             android:layout_width="match_parent"
             android:layout_height="64dp"
