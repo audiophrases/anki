@@ -8,16 +8,9 @@ sealed interface Segment {
      * Edge engine — set when a line needs prosody (e.g. a production blank that
      * should be slowed). [leadIn] is false when the utterance carries straight
      * on mid-line (a blank, or the rest of the sentence after it), so the player
-     * skips the clip's warm-up silence instead of leaving a gap. [locale] is set
-     * (e.g. "ca-ES") when the line is detected as a non-English language that
-     * needs its own voice; null means the learner's chosen voice.
+     * skips the clip's warm-up silence instead of leaving a gap.
      */
-    data class Speech(
-        val text: String,
-        val ssml: String? = null,
-        val leadIn: Boolean = true,
-        val locale: String? = null,
-    ) : Segment
+    data class Speech(val text: String, val ssml: String? = null, val leadIn: Boolean = true) : Segment
     data class Bleep(val durationMs: Int = 500) : Segment
     data class Pause(val durationMs: Long) : Segment
 }
@@ -274,24 +267,7 @@ object AudioScript {
         // two distinct same-length words (in / on).
         var lastBlankedLine: List<String> = emptyList()
 
-        // The voice is decided per whole line (enough words to judge; the
-        // fragments around a blank are not) and stamped on every clip the line
-        // produced. Called when a line ends, i.e. at the next iteration and after
-        // the loop, so the `continue`s below need no special care.
-        var lineStart = 0
-        var lineLocale: String? = null
-        fun stampLine() {
-            val locale = lineLocale ?: return
-            for (i in lineStart until out.size) {
-                val seg = out[i]
-                if (seg is Segment.Speech) out[i] = seg.copy(locale = locale)
-            }
-        }
-
         for (line in lines) {
-            stampLine()
-            lineStart = out.size
-            lineLocale = LanguageGuess.localeOf(line)
             val tokens = BLANK_TOKEN.findAll(line).toList()
             if (tokens.isEmpty()) {
                 out += Segment.Speech(expandAbbreviations(line))
@@ -337,7 +313,6 @@ object AudioScript {
             }
             out += Segment.Pause(LINE_PAUSE_MS)
         }
-        stampLine()
 
         // Production: speak the letter hint after the sentence — from a dedicated
         // (blanks-only) hint field, else from the last blanked line's blanks.

@@ -165,7 +165,7 @@ object EdgeTts {
                             "X-Timestamp:${timestamp()}\r\n" +
                             "Path:ssml\r\n\r\n" +
                             "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' " +
-                            "xml:lang='${langOf(voice)}'><voice name='$voice'>$body</voice></speak>"
+                            "xml:lang='en-US'><voice name='$voice'>$body</voice></speak>"
                     )
                 }
 
@@ -232,10 +232,6 @@ object EdgeTts {
         MessageDigest.getInstance("SHA-256")
             .digest(s.toByteArray())
             .joinToString("") { "%02x".format(it) }
-
-    /** "ca-ES-JoanaNeural" → "ca-ES"; the document language should match the voice. */
-    private fun langOf(voice: String): String =
-        voice.split('-').take(2).joinToString("-").ifBlank { "en-US" }
 
     private fun uuid(): String = UUID.randomUUID().toString().replace("-", "")
 

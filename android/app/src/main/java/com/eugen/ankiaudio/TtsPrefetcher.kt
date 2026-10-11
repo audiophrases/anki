@@ -52,20 +52,17 @@ class TtsPrefetcher(private val context: Context) {
         for (card in cards) {
             s.launch {
                 for (seg in scriptSpeech(card)) {
-                    // Same per-clip voice playback will pick (Catalan lines get
-                    // the Catalan voice), or prefetch would warm the wrong entry.
-                    val segVoice = EdgeVoices.voiceFor(voice, seg.locale)
                     // Key on the SSML when present (a prosody variant is its own
                     // cache entry) so prefetch warms exactly what playback reads.
                     val cacheText = seg.ssml ?: seg.text
-                    val key = "$segVoice|$cacheText"
-                    if (TtsCache.fileFor(context, segVoice, cacheText).length() > 0) {
+                    val key = "$voice|$cacheText"
+                    if (TtsCache.fileFor(context, voice, cacheText).length() > 0) {
                         seen.add(key); continue
                     }
                     if (!seen.add(key)) continue // already cached this session or queued
                     gate.withLock {
                         try {
-                            EdgeTts.synthesize(context, seg.text, segVoice, seg.ssml)
+                            EdgeTts.synthesize(context, seg.text, voice, seg.ssml)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
