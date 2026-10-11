@@ -101,11 +101,11 @@ class AudioScriptTest {
     private fun productionSegments(word: String, definition: String, example: String, hint: String) =
         AudioScript.forQuestion("$definition\n\n$example\n\n$hint", word)
 
-    @Test fun productionBlankPausesBeforeButNotAfter() {
+    @Test fun productionBlankFollowsStraightOnBothSides() {
         val segments = productionSegments("hone", "sharpen", "The bone had been h${blanks(3)}d to a point.", "h${blanks(3)}")
         val i = segments.indexOfFirst { it is Segment.Speech && it.text == "blank" }
-        // Only a short beat before the blank: mid-sentence, no clip replays its warm-up lead-in.
-        assertEquals(Segment.Pause(100), segments[i - 1])
+        // No added silence before the blank, and mid-sentence no clip replays its warm-up lead-in.
+        assertEquals(Segment.Speech("The bone had been"), segments[i - 1])
         val blank = segments[i] as Segment.Speech
         assertFalse(blank.leadIn)
         assertTrue(blank.ssml!!.contains("rate='-10%'"))
@@ -119,7 +119,7 @@ class AudioScriptTest {
             "She wasn't ${blanks(2)} ${blanks(2)} the plan.", "${blanks(2)} ${blanks(2)}",
         )
         val i = segments.indexOfFirst { it is Segment.Speech && it.text == "blank" }
-        assertTrue(segments[i - 1] is Segment.Pause)
+        assertEquals(Segment.Speech("She wasn't"), segments[i - 1])
         assertEquals(Segment.Speech("blank", ssml = (segments[i] as Segment.Speech).ssml, leadIn = false), segments[i + 1])
         assertEquals(Segment.Speech("the plan.", leadIn = false), segments[i + 2])
     }

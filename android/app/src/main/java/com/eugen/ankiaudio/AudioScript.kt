@@ -136,25 +136,24 @@ object AudioScript {
     private const val MARK_OPEN = "\uE000"
     private const val MARK_CLOSE = "\uE001"
 
-    /** How much Edge slows the spoken blank, and the silence before it. */
+    /** How much Edge slows the spoken blank. */
     private const val BLANK_RATE = "-10%"
-    private const val BLANK_PAUSE_MS = 100L
 
     /**
      * Splits a rendered line whose codewords are [MARK_OPEN]…[MARK_CLOSE]-marked
      * into segments that make each production blank stand out: the surrounding
-     * text plays normally, and every blank becomes its own utterance — slowed via
-     * SSML after a short [BLANK_PAUSE_MS] beat — so the learner clearly hears
-     * *where* the missing word goes instead of it flashing by. After the blank
-     * the sentence carries straight on, with no pause; a blank right after a
-     * blank ("blank blank") follows on the same way. Only the line's first clip
-     * keeps its warm-up lead-in ([Segment.Speech.leadIn]): mid-line the output
-     * is still warm, so the lead-in would only stretch those pauses.
+     * text plays normally, and every blank becomes its own utterance, slowed via
+     * SSML, so the learner clearly hears *where* the missing word goes instead
+     * of it flashing by. There is no added silence on either side of it: the
+     * blank follows its sentence directly (what gap remains is the clips' own
+     * edge silence) and the sentence carries straight on after it; a blank right
+     * after a blank ("blank blank") follows on the same way. Only the line's
+     * first clip keeps its warm-up lead-in ([Segment.Speech.leadIn]): mid-line
+     * the output is still warm, so the lead-in would only stretch those pauses.
      *
      * The blank's SSML is a whole-utterance `<prosody pitch rate volume>` wrapper,
      * the only shape Edge's read-aloud endpoint accepts (the same one edge-tts
-     * uses); the pause is a real silence segment, not `<break>` (which Edge
-     * rejects). The platform-TTS fallback ignores the SSML and reads "blank".
+     * uses). The platform-TTS fallback ignores the SSML and reads "blank".
      */
     private fun blankEmphasised(marked: String): List<Segment> {
         val out = mutableListOf<Segment>()
@@ -172,7 +171,6 @@ object AudioScript {
             if (open < 0) break
             val close = marked.indexOf(MARK_CLOSE, open)
             val word = marked.substring(open + MARK_OPEN.length, close)
-            if (!afterBlank) out += Segment.Pause(BLANK_PAUSE_MS)
             out += Segment.Speech(word, ssml = slowProsody(word), leadIn = !spoke)
             spoke = true
             afterBlank = true
