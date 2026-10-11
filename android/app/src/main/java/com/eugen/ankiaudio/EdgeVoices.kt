@@ -61,6 +61,22 @@ object EdgeVoices {
             .edit().putString(PREF_VOICE, shortName).apply()
     }
 
+    /** Native Edge voice used for lines detected as Catalan ([LanguageGuess.CATALAN]). */
+    const val CATALAN_VOICE = "ca-ES-JoanaNeural"
+
+    /**
+     * The voice for one clip: the learner's [saved] voice, unless the clip is in
+     * another language ([locale], from [LanguageGuess]) that has a dedicated
+     * voice here. A saved voice already in that language is kept, so a learner
+     * who picked a Catalan voice (e.g. the male Enric) still gets it.
+     */
+    fun voiceFor(saved: String, locale: String?): String = when {
+        locale == null -> saved
+        saved.startsWith(locale.substringBefore('-') + "-") -> saved
+        locale == LanguageGuess.CATALAN -> CATALAN_VOICE
+        else -> saved
+    }
+
     // ---- catalog ----
 
     /**

@@ -9,6 +9,7 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.io.File
 import java.io.FileInputStream
+import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
@@ -57,7 +58,7 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
                 for ((i, seg) in segments.withIndex()) {
                     Log.i(TAG, "segment $i: $seg")
                     when (seg) {
-                        is Segment.Speech -> speakText(seg.text, seg.ssml, seg.leadIn)
+                        is Segment.Speech -> speakText(seg.text, seg.ssml, seg.leadIn, seg.locale)
                         is Segment.Bleep -> bleep(seg.durationMs)
                         is Segment.Pause -> delay(seg.durationMs)
                     }
@@ -88,11 +89,17 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         fallbackTts.shutdown()
     }
 
-    private suspend fun speakText(text: String, ssml: String? = null, leadIn: Boolean = true) {
+    private suspend fun speakText(
+        text: String,
+        ssml: String? = null,
+        leadIn: Boolean = true,
+        locale: String? = null,
+    ) {
         val file: File? = try {
             // Read the chosen voice per-utterance so changing it on the start
-            // screen takes effect on the next card without a restart.
-            val voice = EdgeVoices.savedVoice(context)
+            // screen takes effect on the next card without a restart. A clip in
+            // another language (Catalan) swaps to that language's native voice.
+            val voice = EdgeVoices.voiceFor(EdgeVoices.savedVoice(context), locale)
             withContext(Dispatchers.IO) { EdgeTts.synthesize(context, text, voice, ssml) }
         } catch (e: CancellationException) {
             throw e
@@ -100,7 +107,7 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
             Log.w(TAG, "Edge TTS failed (${e.message}); using platform TTS")
             null
         }
-        if (file != null) playFile(file, leadIn) else speakWithPlatformTts(text)
+        if (file != null) playFile(file, leadIn) else speakWithPlatformTts(text, locale)
     }
 
     private suspend fun playFile(file: File, leadIn: Boolean) {
@@ -140,10 +147,18 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         }
     }
 
-    private suspend fun speakWithPlatformTts(text: String) {
+    private suspend fun speakWithPlatformTts(text: String, locale: String? = null) {
         if (!fallbackReady) {
             Log.w(TAG, "no TTS available for: ${text.take(40)}")
             return
+        }
+        // Catalan if the device has it, else its default; always reset so a
+        // Catalan clip doesn't leave the next English one in the wrong language.
+        val wanted = locale?.let { Locale.forLanguageTag(it) } ?: Locale.getDefault()
+        if (fallbackTts.isLanguageAvailable(wanted) >= TextToSpeech.LANG_AVAILABLE) {
+            fallbackTts.language = wanted
+        } else {
+            fallbackTts.language = Locale.getDefault()
         }
         suspendCancellableCoroutine { cont ->
             val id = UUID.randomUUID().toString()
