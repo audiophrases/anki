@@ -127,8 +127,11 @@ object EdgeTts {
     /** [body] is the already-escaped SSML inner content of the `<voice>` element. */
     private suspend fun requestAudio(body: String, voice: String): ByteArray =
         suspendCancellableCoroutine { cont ->
-            val url = "wss://speech.platform.bing.com/consumer/speech/synthesize/" +
-                "readaloud/edge/v1?TrustedClientToken=$TRUSTED_CLIENT_TOKEN" +
+            // Edge moved Read Aloud to a new host in 2026-10 (rany2/edge-tts#490); the
+            // legacy speech.platform.bing.com now answers 403 for many regions. The new
+            // host still accepts the legacy Sec-MS-GEC token.
+            val url = "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1" +
+                "?Ocp-Apim-Subscription-Key=$TRUSTED_CLIENT_TOKEN" +
                 "&Sec-MS-GEC=${secMsGec()}" +
                 "&Sec-MS-GEC-Version=1-$CHROMIUM_FULL_VERSION" +
                 "&ConnectionId=${uuid()}"
