@@ -22,6 +22,9 @@
          AnkiDroid's provider and queries silently return null. -->
     <queries>
         <provider android:authorities="com.ichi2.anki.flashcards" />
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <application

@@ -1,0 +1,15 @@
+package com.eugen.ankiaudio
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class EdgeTokenTest {
+    // Reference vectors from upstream edge-tts ef51a4d, including a 5-minute boundary.
+    @Test fun matchesUpstreamV2Tokens() {
+        assertEquals("52BC7A17B50DFEC9-28C4394775C8751CD2F6859C030C06DB1489ACAB3B3A7651831FC26895177ED6", EdgeToken.generate(0L))
+        assertEquals("2CD23A2CA0B2595A-F3C846C370E05F9CC83ACC5F995C5F5D87A4D0F14CE8936A0F902E64099E38A2", EdgeToken.generate(1700000000L))
+        assertEquals("BA6BBA6F6C1F3C56-B8D7B394E1413FD336F8C207AA28498B176D59C944F6406F4C05945E2BFF341F", EdgeToken.generate(1794848400L))
+        assertEquals("BA6BBA6F6C1F3C56-B8D7B394E1413FD336F8C207AA28498B176D59C944F6406F4C05945E2BFF341F", EdgeToken.generate(1794848699L))
+        assertEquals("2ECFBA8B967132B8-D599E300E94778F6B05C09D21E54FEA35F05DC44AC043D5C5426BD451E4832BB", EdgeToken.generate(1794848700L))
+    }
+}

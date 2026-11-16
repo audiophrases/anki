@@ -5,12 +5,12 @@ sealed interface Segment {
     /**
      * Spoken text. [text] is the plain form (used for the platform-TTS fallback
      * and logging); [ssml] is an optional pre-built SSML inner fragment for the
-     * Edge engine — set when a line needs prosody (e.g. a production blank that
-     * should be slowed). [leadIn] is false when the utterance carries straight
-     * on mid-line (a blank, or the rest of the sentence after it), so the player
-     * skips the clip's warm-up silence instead of leaving a gap.
+     * Edge engine. [leadIn] is false for text continuing after a blank.
+     * The player assembles lines containing [Blank] into continuous audio.
      */
     data class Speech(val text: String, val ssml: String? = null, val leadIn: Boolean = true) : Segment
+    /** The learner's recorded "mhm", followed by 300 ms to register the blank. */
+    data object Blank : Segment
     data class Bleep(val durationMs: Int = 500) : Segment
     data class Pause(val durationMs: Long) : Segment
 }
@@ -30,11 +30,10 @@ sealed interface Segment {
  *   blank is filled — with the whole word/phrase when its exact form can't be
  *   worked out — so a recognition card never says "blank".
  * - **PRODUCTION** (meaning given, produce the word — the word is hidden):
- *   in the example sentence each hidden word becomes the codeword "blank"
- *   so the sentence keeps its natural flow ("She blank him into taking her
- *   with him."), and the detailed letter hint is spoken once, separately,
- *   from the hint field: "8 letter word starting with W H and ending
- *   with D."
+ *   read the definition, then the detailed letter hint, then the example.
+ *   Each hidden word in the example becomes the user's recorded "mhm", with
+ *   300 ms after it. The letter hint is spoken once from the hint field:
+ *   "8 letter word starting with W H and ending with D."
  *
  * A line consisting of nothing but a blanked token (a dedicated hint field
  * like "wh•••••") is skipped when a blank was already rendered inline in an
@@ -128,37 +127,21 @@ object AudioScript {
         .replace(Regex("\\s+"), " ")
         .trim()
 
-    /** Stand-in spoken for a hidden word inside a production sentence. */
+    /** Internal marker content; never sent to TTS. */
     private const val CODEWORD = "blank"
 
-    // Private-use sentinels that bracket a codeword inside a rendered line, so we
-    // can later wrap just those spans in SSML (they never occur in card text).
+    // Private-use sentinels identify recording positions inside a rendered line.
     private const val MARK_OPEN = "\uE000"
     private const val MARK_CLOSE = "\uE001"
 
-    /** How much Edge slows the spoken blank. */
-    private const val BLANK_RATE = "-10%"
-
     /**
-     * Splits a rendered line whose codewords are [MARK_OPEN]…[MARK_CLOSE]-marked
-     * into segments that make each production blank stand out: the surrounding
-     * text plays normally, and every blank becomes its own utterance, slowed via
-     * SSML, so the learner clearly hears *where* the missing word goes instead
-     * of it flashing by. There is no added silence on either side of it: the
-     * blank follows its sentence directly (what gap remains is the clips' own
-     * edge silence) and the sentence carries straight on after it; a blank right
-     * after a blank ("blank blank") follows on the same way. Only the line's
-     * first clip keeps its warm-up lead-in ([Segment.Speech.leadIn]): mid-line
-     * the output is still warm, so the lead-in would only stretch those pauses.
-     *
-     * The blank's SSML is a whole-utterance `<prosody pitch rate volume>` wrapper,
-     * the only shape Edge's read-aloud endpoint accepts (the same one edge-tts
-     * uses). The platform-TTS fallback ignores the SSML and reads "blank".
+     * Mark the speech fragments and recording positions. CardSpeaker trims each
+     * speech clip's outside silence and assembles the whole line before playback,
+     * adding 300 ms after each recording. Adjacent blanks remain distinct.
      */
     private fun blankEmphasised(marked: String): List<Segment> {
         val out = mutableListOf<Segment>()
         var spoke = false // a clip of this line has played: the output is warm
-        var afterBlank = false
         var i = 0
         while (i < marked.length) {
             val open = marked.indexOf(MARK_OPEN, i)
@@ -166,25 +149,15 @@ object AudioScript {
             if (text.isNotEmpty()) {
                 out += Segment.Speech(text, leadIn = !spoke)
                 spoke = true
-                afterBlank = false
             }
             if (open < 0) break
             val close = marked.indexOf(MARK_CLOSE, open)
-            val word = marked.substring(open + MARK_OPEN.length, close)
-            out += Segment.Speech(word, ssml = slowProsody(word), leadIn = !spoke)
+            out += Segment.Blank
             spoke = true
-            afterBlank = true
             i = close + MARK_CLOSE.length
         }
         return out
     }
-
-    /** A whole-utterance prosody wrapper (edge-tts's exact shape) that slows [word]. */
-    private fun slowProsody(word: String): String =
-        "<prosody pitch='+0Hz' rate='$BLANK_RATE' volume='+0%'>${escapeXml(word)}</prosody>"
-
-    private fun escapeXml(s: String): String =
-        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     /** Dictionary tags in Eugen's main deck → how the voice should say them. */
     private val SPOKEN_ABBREVIATION = mapOf(
@@ -256,6 +229,7 @@ object AudioScript {
             .distinct()
 
         val out = mutableListOf<Segment>()
+        val examples = mutableListOf<Segment>()
         var hintFieldPhrase: String? = null
         // Unrestored blanks of the most recent blanked line. The note's hint field
         // (e.g. "be •• •• something") is the last such line and carries exactly one
@@ -286,7 +260,7 @@ object AudioScript {
 
             // Example sentence: on recognition the visible word drops back into the
             // blanks; on production the word is hidden, so every blank becomes the
-            // spoken codeword (never a look-alike like the definition's "stated").
+            // recording (never a look-alike like the definition's "stated").
             val tokenValues = tokens.map { it.value }
             val restored: List<String?> = when {
                 production -> List(tokenValues.size) { null }
@@ -303,16 +277,17 @@ object AudioScript {
                 }
             }.replace(EXTRA_SPACE, " ").replace(SPACE_BEFORE_PUNCTUATION, "$1")
             val expanded = expandAbbreviations(rendered)
+            val destination = if (production) examples else out
             if (lineBlanks.isNotEmpty()) {
-                out += blankEmphasised(expanded)
+                destination += blankEmphasised(expanded)
                 lastBlankedLine = lineBlanks
             } else {
-                out += Segment.Speech(expanded)
+                destination += Segment.Speech(expanded)
             }
-            out += Segment.Pause(LINE_PAUSE_MS)
+            destination += Segment.Pause(LINE_PAUSE_MS)
         }
 
-        // Production: speak the letter hint after the sentence — from a dedicated
+        // Production: definition, letter hint, then examples — from a dedicated
         // (blanks-only) hint field, else from the last blanked line's blanks.
         val hint = hintFieldPhrase
             ?: lastBlankedLine.map { hintPhrase(it) }.takeIf { it.isNotEmpty() }
@@ -321,6 +296,7 @@ object AudioScript {
             out += Segment.Speech(hint)
             out += Segment.Pause(LINE_PAUSE_MS)
         }
+        out += examples
         return out
     }
 

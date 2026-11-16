@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -106,9 +105,9 @@ object EdgeTts {
         Log.i(TAG, "cache miss, requesting \"${key.take(40)}\"")
         // OkHttp read timeouts don't apply to websocket streams, and the server
         // can close without sending audio — bound the whole exchange ourselves.
-        val bytes = kotlinx.coroutines.withTimeout(15_000) {
+        val bytes = kotlinx.coroutines.withTimeoutOrNull(15_000) {
             requestAudio(ssml ?: escapeXml(text), voice)
-        }
+        } ?: error("Edge TTS request timed out")
         // Write to a temp file then atomically swap it in: a cancelled write, or
         // two workers racing the same key, can never leave a half-written MP3
         // that a later run would mistake for a valid cache hit. A silent lead-in
@@ -129,11 +128,11 @@ object EdgeTts {
         suspendCancellableCoroutine { cont ->
             // Edge moved Read Aloud to a new host in 2026-10 (rany2/edge-tts#490); the
             // legacy speech.platform.bing.com now answers 403 for many regions. The new
-            // host still accepts the legacy Sec-MS-GEC token.
+            // host requires the v2 token (edge-tts upstream PR #492).
             val url = "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1" +
                 "?Ocp-Apim-Subscription-Key=$TRUSTED_CLIENT_TOKEN" +
-                "&Sec-MS-GEC=${secMsGec()}" +
-                "&Sec-MS-GEC-Version=1-$CHROMIUM_FULL_VERSION" +
+                "&Sec-MS-GEC=${EdgeToken.generate()}" +
+                "&Sec-MS-GEC-Version=2-$CHROMIUM_FULL_VERSION" +
                 "&ConnectionId=${uuid()}"
             val request = Request.Builder()
                 .url(url)
@@ -212,16 +211,6 @@ object EdgeTts {
             cont.invokeOnCancellation { ws.cancel() }
         }
 
-    /**
-     * Clock-derived token the endpoint requires: SHA-256 of Windows-epoch
-     * ticks (rounded down to 5 min) + the trusted client token.
-     */
-    private fun secMsGec(): String {
-        var seconds = System.currentTimeMillis() / 1000 + 11_644_473_600L
-        seconds -= seconds % 300
-        return sha256Hex("${seconds * 10_000_000}$TRUSTED_CLIENT_TOKEN").uppercase()
-    }
-
     private fun timestamp(): String {
         val fmt = SimpleDateFormat(
             "EEE MMM dd yyyy HH:mm:ss 'GMT+0000 (Coordinated Universal Time)'",
@@ -230,11 +219,6 @@ object EdgeTts {
         fmt.timeZone = TimeZone.getTimeZone("UTC")
         return fmt.format(Date())
     }
-
-    private fun sha256Hex(s: String): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest(s.toByteArray())
-            .joinToString("") { "%02x".format(it) }
 
     private fun uuid(): String = UUID.randomUUID().toString().replace("-", "")
 

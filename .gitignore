@@ -8,6 +8,7 @@ Thumbs.db
 #  never accidentally stages build artifacts or your local SDK path.)
 android/local.properties
 android/.gradle/
+android/.kotlin/
 android/build/
 android/app/build/
 android/captures/

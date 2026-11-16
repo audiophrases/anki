@@ -16,7 +16,13 @@ class AudioScriptTest {
 
     /** What the voice says, one utterance per " | ". */
     private fun spoken(segments: List<Segment>) =
-        segments.filterIsInstance<Segment.Speech>().joinToString(" | ") { it.text }
+        segments.mapNotNull {
+            when (it) {
+                is Segment.Speech -> it.text
+                is Segment.Blank -> "[mhm]"
+                else -> null
+            }
+        }.joinToString(" | ")
 
     private fun recognition(word: String, example: String) =
         spoken(AudioScript.forQuestion("$word\n\n$example", word))
@@ -85,8 +91,8 @@ class AudioScriptTest {
 
     // ---- production: the word stays hidden ----
 
-    @Test fun productionSaysBlankAndHint() = assertEquals(
-        "sharpen | The bone had been | blank | to a point. | 4 letter word starting with H",
+    @Test fun productionSaysDefinitionThenHintThenRecordedExample() = assertEquals(
+        "sharpen | 4 letter word starting with H | The bone had been | [mhm] | to a point.",
         production("hone", "sharpen", "The bone had been h${blanks(3)}d to a point.", "h${blanks(3)}"),
     )
 
@@ -94,33 +100,31 @@ class AudioScriptTest {
         val said = production(
             "chestnut", "edible nut of a chestnut tree", "She roasted a c${blanks(7)} over the fire.", "c${blanks(7)}",
         )
-        assertTrue(said, said.contains("She roasted a | blank | over the fire."))
+        assertTrue(said, said.contains("She roasted a | [mhm] | over the fire."))
     }
 
     /** The segments of a production card's question, as the speaker plays them. */
     private fun productionSegments(word: String, definition: String, example: String, hint: String) =
         AudioScript.forQuestion("$definition\n\n$example\n\n$hint", word)
 
-    @Test fun productionBlankFollowsStraightOnBothSides() {
+    @Test fun productionUsesRecordingWithoutSpokenBlankOrExplicitPrePause() {
         val segments = productionSegments("hone", "sharpen", "The bone had been h${blanks(3)}d to a point.", "h${blanks(3)}")
-        val i = segments.indexOfFirst { it is Segment.Speech && it.text == "blank" }
+        val i = segments.indexOfFirst { it is Segment.Blank }
         // No added silence before the blank, and mid-sentence no clip replays its warm-up lead-in.
         assertEquals(Segment.Speech("The bone had been"), segments[i - 1])
-        val blank = segments[i] as Segment.Speech
-        assertFalse(blank.leadIn)
-        assertTrue(blank.ssml!!.contains("rate='-10%'"))
-        // The sentence carries straight on after it.
+        assertFalse(segments.filterIsInstance<Segment.Speech>().any { it.text == "blank" })
+        // The assembled recording supplies its own post-blank pause.
         assertEquals(Segment.Speech("to a point.", leadIn = false), segments[i + 1])
     }
 
-    @Test fun productionAdjacentBlanksFollowOnWithoutPauses() {
+    @Test fun productionAdjacentBlanksEachKeepARecording() {
         val segments = productionSegments(
             "be in on something", "involved in a secret",
             "She wasn't ${blanks(2)} ${blanks(2)} the plan.", "${blanks(2)} ${blanks(2)}",
         )
-        val i = segments.indexOfFirst { it is Segment.Speech && it.text == "blank" }
+        val i = segments.indexOfFirst { it is Segment.Blank }
         assertEquals(Segment.Speech("She wasn't"), segments[i - 1])
-        assertEquals(Segment.Speech("blank", ssml = (segments[i] as Segment.Speech).ssml, leadIn = false), segments[i + 1])
+        assertEquals(Segment.Blank, segments[i + 1])
         assertEquals(Segment.Speech("the plan.", leadIn = false), segments[i + 2])
     }
 
@@ -190,6 +194,23 @@ class AudioScriptTest {
         val text = spoken(AudioScript.forQuestion(question, word = "frolic"))
 
         assertFalse(text, text.contains("frolicked"))
-        assertTrue(text, text.contains("blank"))
+        assertTrue(text, text.contains("[mhm]"))
     }
+
+    @Test fun figureOutExampleFollowsDefinitionAndShape() = assertEquals(
+        "understand or solve | 6 letter word starting with F, then a 3 letter word starting with O | I still need to | [mhm] | things | [mhm]",
+        production("figure out", "understand or solve", "I still need to f••••• things o••.", "f••••• o••"),
+    )
+
+    @Test fun hintWithoutDedicatedFieldStillPrecedesExample() = assertEquals(
+        "understand | 6 letter word, then a 3 letter word | I still need to | [mhm] | things | [mhm]",
+        spoken(AudioScript.forQuestion("understand\nI still need to •••••• things •••.", "figure out")),
+    )
+
+    @Test fun productionAnswerDoesNotRepeatExamplesOrHints() = assertEquals(
+        "figure out",
+        spoken(AudioScript.forAnswer(
+            "figure out\nunderstand\nI still need to f••••• things o••.\nf••••• o••",
+            "understand\nI still need to f••••• things o••.\nf••••• o••", "figure out")),
+    )
 }

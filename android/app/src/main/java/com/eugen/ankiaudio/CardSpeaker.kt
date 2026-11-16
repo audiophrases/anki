@@ -11,7 +11,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.util.UUID
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,6 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Plays an audio script (speech / bleep / pause) for one card.
@@ -28,7 +31,13 @@ import kotlinx.coroutines.withContext
  * (offline, endpoint change) it falls back to the device's own TTS engine so
  * studying never hard-stops.
  */
-class CardSpeaker(private val context: Context, private val scope: CoroutineScope) {
+class CardSpeaker(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val edgeSynthesis: suspend (String, String, String?) -> File = { text, voice, ssml ->
+        EdgeTts.synthesize(context, text, voice, ssml)
+    },
+) {
 
     private companion object {
         const val TAG = "CardSpeaker"
@@ -42,8 +51,10 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
     private var player: MediaPlayer? = null
 
     private var fallbackReady = false
+    private val fallbackInitialized = CompletableDeferred<Boolean>()
     private val fallbackTts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
         fallbackReady = status == TextToSpeech.SUCCESS
+        fallbackInitialized.complete(fallbackReady)
         if (!fallbackReady) Log.w(TAG, "platform TTS init failed: $status")
     }
 
@@ -54,13 +65,28 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         job = scope.launch {
             onPlaybackStart?.invoke()
             try {
-                for ((i, seg) in segments.withIndex()) {
+                var i = 0
+                while (i < segments.size) {
+                    val seg = segments[i]
                     Log.i(TAG, "segment $i: $seg")
+                    if (seg is Segment.Speech || seg is Segment.Blank) {
+                        var end = i + 1
+                        while (end < segments.size &&
+                            (segments[end] is Segment.Speech || segments[end] is Segment.Blank)) end++
+                        val line = segments.subList(i, end)
+                        if (line.any { it is Segment.Blank }) {
+                            speakSentence(line)
+                            i = end
+                            continue
+                        }
+                    }
                     when (seg) {
                         is Segment.Speech -> speakText(seg.text, seg.ssml, seg.leadIn)
+                        is Segment.Blank -> error("Blank must be assembled with its sentence")
                         is Segment.Bleep -> bleep(seg.durationMs)
                         is Segment.Pause -> delay(seg.durationMs)
                     }
+                    i++
                 }
                 Log.i(TAG, "script done")
                 onPlaybackEnd?.invoke()
@@ -78,7 +104,8 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
     fun stop() {
         job?.cancel()
         job = null
-        player?.let { runCatching { it.stop() }; it.release() }
+        // playFile owns release in its finally block, including cancellation during prepare.
+        player?.let { runCatching { it.stop() } }
         player = null
         if (fallbackReady) fallbackTts.stop()
     }
@@ -88,12 +115,77 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
         fallbackTts.shutdown()
     }
 
+    private suspend fun speakSentence(line: List<Segment>) {
+        val voice = EdgeVoices.savedVoice(context)
+        suspend fun parts(platform: Boolean): List<SentencePcm.Part> = line.map { segment ->
+            when (segment) {
+                is Segment.Blank -> SentencePcm.Part(SentenceAudio.blank(context), blank = true)
+                is Segment.Speech -> {
+                    val temporary = if (platform) File.createTempFile("platform-tts-", ".wav", context.cacheDir) else null
+                    try {
+                        val file = if (temporary != null) {
+                            synthesizeWithPlatformTts(segment.text, temporary)
+                            temporary
+                        } else withContext(Dispatchers.IO) {
+                            edgeSynthesis(segment.text, voice, segment.ssml)
+                        }
+                        withContext(Dispatchers.IO) {
+                            SentencePcm.Part(SentencePcm.fade(SentencePcm.trim(SentenceAudio.decode(file))))
+                        }
+                    } finally {
+                        temporary?.delete()
+                    }
+                }
+                else -> error("Unexpected sentence part: $segment")
+            }
+        }
+        val prepared = try {
+            parts(platform = false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Sentence synthesis failed (${e.message}); assembling with platform TTS")
+            parts(platform = true)
+        }
+        val file = File.createTempFile("sentence-", ".wav", context.cacheDir)
+        try {
+            withContext(Dispatchers.IO) {
+                file.outputStream().buffered().use { SentencePcm.writeWav(it, SentencePcm.assemble(prepared)) }
+            }
+            playFile(file, leadIn = true)
+        } finally {
+            file.delete()
+        }
+    }
+
+    private suspend fun synthesizeWithPlatformTts(text: String, file: File): Unit = withTimeoutOrNull(15_000) {
+        check(fallbackInitialized.await()) { "Platform TTS unavailable" }
+        suspendCancellableCoroutine<Unit> { cont ->
+            val id = UUID.randomUUID().toString()
+            fallbackTts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(utteranceId: String?) {
+                    if (utteranceId == id && cont.isActive) cont.resume(Unit)
+                }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    if (utteranceId == id && cont.isActive)
+                        cont.resumeWithException(IllegalStateException("Platform synthesis failed"))
+                }
+            })
+            val result = fallbackTts.synthesizeToFile(text, android.os.Bundle(), file, id)
+            if (result == TextToSpeech.ERROR && cont.isActive)
+                cont.resumeWithException(IllegalStateException("Platform synthesis rejected"))
+            cont.invokeOnCancellation { fallbackTts.stop() }
+        }
+    } ?: error("Platform synthesis timed out")
+
     private suspend fun speakText(text: String, ssml: String? = null, leadIn: Boolean = true) {
         val file: File? = try {
             // Read the chosen voice per-utterance so changing it on the start
             // screen takes effect on the next card without a restart.
             val voice = EdgeVoices.savedVoice(context)
-            withContext(Dispatchers.IO) { EdgeTts.synthesize(context, text, voice, ssml) }
+            withContext(Dispatchers.IO) { edgeSynthesis(text, voice, ssml) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -104,39 +196,32 @@ class CardSpeaker(private val context: Context, private val scope: CoroutineScop
     }
 
     private suspend fun playFile(file: File, leadIn: Boolean) {
-        val mp = withContext(Dispatchers.IO) {
-            MediaPlayer().apply {
-                // Mid-sentence the output is still warm: start after the clip's
-                // warm-up lead-in so the sentence carries straight on.
-                val skip = if (leadIn) 0L else EdgeTts.leadInLength(file)
-                if (skip > 0) {
-                    FileInputStream(file).use { setDataSource(it.fd, skip, file.length() - skip) }
-                } else {
-                    setDataSource(file.path)
+        val mp = MediaPlayer()
+        try {
+            withContext(Dispatchers.IO) {
+                mp.apply {
+                    // Assembled sentences already contain a single warm-up lead-in.
+                    val skip = if (leadIn) 0L else EdgeTts.leadInLength(file)
+                    if (skip > 0) {
+                        FileInputStream(file).use { setDataSource(it.fd, skip, file.length() - skip) }
+                    } else {
+                        setDataSource(file.path)
+                    }
+                    prepare()
                 }
-                prepare()
             }
-        }
-        player = mp
-        suspendCancellableCoroutine { cont ->
-            mp.setOnCompletionListener {
-                if (player === mp) player = null
-                mp.release()
-                if (cont.isActive) cont.resume(Unit)
+            player = mp
+            suspendCancellableCoroutine { cont ->
+                mp.setOnCompletionListener { if (cont.isActive) cont.resume(Unit) }
+                mp.setOnErrorListener { _, what, extra ->
+                    if (cont.isActive) cont.resumeWithException(IllegalStateException("MediaPlayer error $what/$extra"))
+                    true
+                }
+                mp.start()
             }
-            mp.setOnErrorListener { p, what, extra ->
-                Log.w(TAG, "MediaPlayer error $what/$extra")
-                if (player === mp) player = null
-                p.release()
-                if (cont.isActive) cont.resume(Unit)
-                true
-            }
-            cont.invokeOnCancellation {
-                if (player === mp) player = null
-                runCatching { mp.stop() }
-                mp.release()
-            }
-            mp.start()
+        } finally {
+            if (player === mp) player = null
+            mp.release()
         }
     }
 
