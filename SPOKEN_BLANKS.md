@@ -1,7 +1,7 @@
 # Spoken blanks
 
 Production cards read **definition → word shape → example**. In the example,
-each hidden word is replaced with the supplied "mhm" recording. Add **300 ms
+each hidden word is replaced with the supplied "mhm" recording. Add **225 ms
 after each recording**, including adjacent blanks and a blank at the end.
 The 30 ms joins from the listening preview remain unchanged.
 
@@ -29,8 +29,8 @@ it retained the TTS service's silence. In the listening prototype:
 | blank (slowed 10%) | 140 ms | 1242 ms |
 
 The untrimmed "I still need to [mhm] things [mhm]" was 4.586 seconds.
-Trimming reduced it to 2.297 seconds; adding the requested 300 ms after each
-recording makes it **2.897 seconds**, before the app's single route warm-up.
+Trimming reduced it to 2.297 seconds; adding the requested 225 ms after each
+recording makes it **2.747 seconds**, before the app's single route warm-up.
 The old path also created a player and potentially waited for synthesis
 between fragments. Those delays were not included in these measurements.
 

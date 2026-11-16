@@ -36,8 +36,8 @@ class SentenceAudioTest {
         }
         val result = SentencePcm.assemble(parts)
         assertEquals(8664, parts[1].samples.size)
-        assertTrue(result.takeLast(7200).all { it == 0.toShort() })
-        assertTrue(result.size / 24000.0 in 3.0..3.4) // includes one 288 ms route warm-up
+        assertTrue(result.takeLast(5400).all { it == 0.toShort() })
+        assertTrue(result.size / 24000.0 in 2.85..3.25) // includes one 288 ms route warm-up
         File(context.cacheDir, "spoken-blanks-device-preview.wav").outputStream().buffered().use {
             SentencePcm.writeWav(it, result)
         }

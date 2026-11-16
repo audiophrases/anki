@@ -9,7 +9,7 @@ sealed interface Segment {
      * The player assembles lines containing [Blank] into continuous audio.
      */
     data class Speech(val text: String, val ssml: String? = null, val leadIn: Boolean = true) : Segment
-    /** The learner's recorded "mhm", followed by 300 ms to register the blank. */
+    /** The learner's recorded "mhm", followed by 225 ms to register the blank. */
     data object Blank : Segment
     data class Bleep(val durationMs: Int = 500) : Segment
     data class Pause(val durationMs: Long) : Segment
@@ -32,7 +32,7 @@ sealed interface Segment {
  * - **PRODUCTION** (meaning given, produce the word — the word is hidden):
  *   read the definition, then the detailed letter hint, then the example.
  *   Each hidden word in the example becomes the user's recorded "mhm", with
- *   300 ms after it. The letter hint is spoken once from the hint field:
+ *   225 ms after it. The letter hint is spoken once from the hint field:
  *   "8 letter word starting with W H and ending with D."
  *
  * A line consisting of nothing but a blanked token (a dedicated hint field
@@ -137,7 +137,7 @@ object AudioScript {
     /**
      * Mark the speech fragments and recording positions. CardSpeaker trims each
      * speech clip's outside silence and assembles the whole line before playback,
-     * adding 300 ms after each recording. Adjacent blanks remain distinct.
+     * adding 225 ms after each recording. Adjacent blanks remain distinct.
      */
     private fun blankEmphasised(marked: String): List<Segment> {
         val out = mutableListOf<Segment>()

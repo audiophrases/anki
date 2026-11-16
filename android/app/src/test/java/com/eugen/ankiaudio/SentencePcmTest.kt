@@ -14,7 +14,7 @@ class SentencePcmTest {
             SentencePcm.Part(speech), SentencePcm.Part(mhm, true))
         val result = SentencePcm.assemble(parts, leadIn = false)
         val join = 720 // 30 ms at 24 kHz, retained from the approved first preview
-        val after = 7200 // exactly 300 ms, only following each mhm
+        val after = 5400 // exactly 225 ms, only following each mhm
         val firstBlank = speech.size + join
         assertArrayEquals(mhm, result.copyOfRange(firstBlank, firstBlank + mhm.size))
         val nextSpeech = firstBlank + mhm.size + after + join
@@ -27,8 +27,8 @@ class SentencePcmTest {
     @Test fun adjacentAndInitialBlanksReceiveTheirOwnPostPause() {
         val result = SentencePcm.assemble(List(2) { SentencePcm.Part(shortArrayOf(500), true) }, false)
         assertEquals(500.toShort(), result[0])
-        assertEquals(500.toShort(), result[1 + 7200 + 720])
-        assertEquals(2 + 14400 + 720, result.size)
+        assertEquals(500.toShort(), result[1 + 5400 + 720])
+        assertEquals(2 + 10800 + 720, result.size)
     }
 
     @Test fun outputWarmupOccursOnlyOnce() {

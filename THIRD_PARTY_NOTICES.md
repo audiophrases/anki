@@ -11,5 +11,5 @@ the replaceable debug APK are provided in `BUILD.md`.
 The `blank_mhm.pcm` audio asset is the user's recording supplied on
 16 November 2026 for use as the app's spoken blank. It is 24 kHz mono signed
 16-bit little-endian PCM (no header), 8664 samples. Processing: trim 60 ms at
-the start, adjust gain by +0.6364 dB, and apply 3 ms edge fades. The 300 ms
+the start, adjust gain by +0.6364 dB, and apply 3 ms edge fades. The 225 ms
 post-blank pause is applied by the player, not stored in the asset.

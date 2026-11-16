@@ -9,7 +9,7 @@ import kotlin.math.sqrt
 /** PCM assembly shared by Edge and platform TTS. Timings match the listening preview. */
 internal object SentencePcm {
     const val RATE = 24_000
-    const val AFTER_BLANK_MS = 300
+    const val AFTER_BLANK_MS = 225
     const val JOIN_MS = 30
     const val LEAD_IN_MS = 288
 
