@@ -13,3 +13,8 @@ android/build/
 android/app/build/
 android/captures/
 android/.idea/
+
+# Desktop Anki add-on: local state (downloaded audio, Anki's per-install config) and bytecode.
+desktop/ankiaudio/user_files/
+desktop/ankiaudio/meta.json
+__pycache__/

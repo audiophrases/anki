@@ -8,8 +8,13 @@ The license is reproduced in `licenses/edge-tts-LGPL-3.0.txt`.
 The modified source is included in this repository; build instructions and
 the replaceable debug APK are provided in `BUILD.md`.
 
+`desktop/ankiaudio/edge_token.py` is a Python port of that same `EdgeToken.kt`
+adaptation (edge-tts drm.py, commit ef51a4d), under the same LGPL-3.0 terms.
+It ships as plain source inside the desktop add-on and can be replaced freely.
+
 The `blank_mhm.pcm` audio asset is the user's recording supplied on
 16 November 2026 for use as the app's spoken blank. It is 24 kHz mono signed
 16-bit little-endian PCM (no header), 8664 samples. Processing: trim 60 ms at
 the start, adjust gain by +0.6364 dB, and apply 3 ms edge fades. The 225 ms
-post-blank pause is applied by the player, not stored in the asset.
+post-blank pause is applied by the player, not stored in the asset. The desktop
+add-on ships an identical copy at `desktop/ankiaudio/blank_mhm.pcm`.

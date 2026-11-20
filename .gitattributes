@@ -19,3 +19,6 @@ gradlew.bat     text eol=crlf
 *.apk           binary
 *.keystore      binary
 *.anki2         binary
+*.pcm           binary
+*.mp3           binary
+*.ankiaddon     binary

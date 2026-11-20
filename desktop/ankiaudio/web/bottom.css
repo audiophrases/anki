@@ -1,0 +1,61 @@
+/* AnkiAudio Read Aloud: shortcut keys shown inside the bottom-bar buttons. */
+kbd.aa-key {
+  display: inline-block;
+  margin-inline-start: 0.5em;
+  padding: 0 0.35em;
+  min-width: 0.8em;
+  border: 1px solid var(--border-strong, #858585);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.8em;
+  line-height: 1.35;
+  color: var(--fg-subtle, #737373);
+  background: var(--canvas-inset, transparent);
+  vertical-align: 0.05em;
+}
+
+button.aa-extra {
+  margin-inline-start: 0;
+}
+
+.aa-icon {
+  display: none;
+}
+
+/* Narrow window, second tier: Play/Undo on a row of their own. */
+#aa-row {
+  text-align: start;
+  padding-inline-start: 9px;
+}
+
+/* Too narrow for the words: icon + key only (see fit() in bottom.js). */
+body.aa-compact button.aa-extra {
+  min-width: 0;
+}
+
+body.aa-compact .aa-icon {
+  display: inline;
+}
+
+body.aa-compact .aa-label {
+  display: none;
+}
+
+#aa-play.aa-speaking {
+  border-color: var(--border-focus, #3b82f6);
+  box-shadow: 0 0 0 2px var(--border-focus, #3b82f6);
+  animation: aa-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes aa-pulse {
+  50% {
+    box-shadow: 0 0 0 1px var(--border-focus, #3b82f6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #aa-play.aa-speaking {
+    animation: none;
+  }
+}

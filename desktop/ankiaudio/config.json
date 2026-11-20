@@ -1,0 +1,10 @@
+{
+    "enabled": true,
+    "voice": "en-US-AndrewMultilingualNeural",
+    "speed": "+0%",
+    "line_pause_ms": 700,
+    "lead_in_ms": 150,
+    "volume": 1.0,
+    "silence_card_audio": true,
+    "prefetch_next_cards": 2
+}

@@ -20,6 +20,15 @@ historical per-milestone code snapshots and notes.
 To build it and put it on a phone (from this or any other machine), see
 **[BUILD.md](BUILD.md)**.
 
+## Desktop version
+
+[`desktop/`](desktop/) holds the **Anki desktop add-on** "Read Aloud". Anki on
+the computer reads each card aloud with the same voice and the same handling of
+blanks, hints and dictionary tags as the phone app. Every review button shows
+its key: `1`–`4` grade, `Space`/`Enter` reveal then Good, `E` edit,
+`P` read again, `U`/`Backspace` undo. Install and details:
+[desktop/README.md](desktop/README.md).
+
 ## Roadmap
 
 | Milestone | What |
