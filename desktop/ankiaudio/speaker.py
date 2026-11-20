@@ -10,6 +10,7 @@ gaps from player setup or synthesis between lines.
 
 from __future__ import annotations
 
+import logging
 import math
 import operator
 import os
@@ -34,8 +35,15 @@ JOIN_MS = 30
 TRIM_PAD_MS = 20
 FADE_MS = 3
 
-#: How long to skip Edge after a network failure, using the Windows voice.
-EDGE_RETRY_S = 60
+#: Pauses between retries when Edge is busy (429) for the card being read.
+EDGE_RETRY_DELAYS_S = (1.0, 2.0, 3.0)
+#: After Edge was busy, prefetching (not reading) holds off this long.
+EDGE_BUSY_S = 30
+#: After Edge was out of reach (no network, hard refusal), read with the
+#: Windows voice without first waiting on Edge, for this long.
+EDGE_OFFLINE_S = 30
+
+log = logging.getLogger("ankiaudio")
 
 _State = getattr(QtMultimedia, "QtAudio", None) or QtMultimedia.QAudio
 
@@ -110,7 +118,8 @@ class Speaker:
         self.assembled: "OrderedDict[tuple, bytes]" = OrderedDict()
         self.path_locks: Dict[str, threading.Lock] = {}
         self.locks_guard = threading.Lock()
-        self.edge_down_until = 0.0
+        self.offline_until = 0.0
+        self.busy_until = 0.0
         self.last_notice = 0.0
         self.speaking = False
         threading.Thread(target=self.cache.trim, daemon=True).start()
@@ -148,7 +157,7 @@ class Speaker:
                 self._decode_all(segments, files, key, gen)
 
         for text in texts:
-            self.pool.submit(self._synth_job, text, voice, speed).add_done_callback(
+            self.pool.submit(self._synth_job, text, voice, speed, False, gen).add_done_callback(
                 lambda fut, t=text: self.poster.call.emit(lambda: done(t, fut.result()))
             )
 
@@ -197,32 +206,60 @@ class Speaker:
         with self.locks_guard:
             return self.path_locks.setdefault(path, threading.Lock())
 
-    def _synth_job(self, text: str, voice: str, speed: str, prefetch: bool = False) -> Optional[str]:
-        """Worker thread: a playable file for ``text``, or None."""
+    def _synth_job(
+        self, text: str, voice: str, speed: str, prefetch: bool = False, gen: Optional[int] = None
+    ) -> Optional[str]:
+        """Worker thread: a playable file for ``text``, or None.
+
+        The natural Edge voice is the point of the add-on, so a card being
+        read waits out a busy Edge (429, timeouts) with a few short retries.
+        The Windows voice is only for when Edge is really out of reach."""
         try:
             path = self.cache.path_for(voice, speed, text)
             with self._lock_for(path):
-                if time.monotonic() >= self.edge_down_until:
-                    try:
-                        return tts.synthesize_edge(self.cache, text, voice, speed)
-                    except (OSError, tts.TtsUnavailable) as e:
-                        self.edge_down_until = time.monotonic() + getattr(e, "retry_s", EDGE_RETRY_S)
-                        self._notice(f"Edge voice unreachable ({e}); using the Windows voice.")
-                    except Exception as e:  # a problem with this text only
-                        self._notice(f"Edge voice failed ({e}); using the Windows voice.")
-                if prefetch:
-                    return None
+                found = self._edge(text, voice, speed, prefetch, gen)
+            if found or prefetch or (gen is not None and gen != self.generation):
+                return found
             fallback = self.cache.path_for("sapi", speed, text, ".wav")
             with self._lock_for(fallback):
                 if not os.path.isfile(fallback):
                     tmp = fallback + ".tmp.wav"
                     tts.synthesize_windows(text, tmp, speed)
                     os.replace(tmp, fallback)
+            log.warning("Windows voice used for %r", text[:60])
+            self._notice("Edge's natural voice isn't reachable right now; using the Windows voice. P retries.")
             return fallback
         except Exception as e:
+            log.exception("read aloud failed for %r", text[:60])
             self._notice(f"Read aloud failed: {e}")
-            traceback.print_exc()
             return None
+
+    def _edge(self, text: str, voice: str, speed: str, prefetch: bool, gen: Optional[int]) -> Optional[str]:
+        delays = () if prefetch else EDGE_RETRY_DELAYS_S
+        for attempt in range(len(delays) + 1):
+            now = time.monotonic()
+            if now < self.offline_until or (prefetch and now < self.busy_until):
+                return None
+            try:
+                return tts.synthesize_edge(self.cache, text, voice, speed)
+            except tts.TtsUnavailable as e:
+                log.warning("Edge attempt %d for %r: %s", attempt + 1, text[:60], e)
+                if not e.transient:  # e.g. 403: retrying won't help
+                    self.offline_until = time.monotonic() + EDGE_OFFLINE_S
+                    return None
+                self.busy_until = time.monotonic() + EDGE_BUSY_S  # prefetch backs off
+            except OSError as e:  # no network: don't make every card wait
+                log.warning("Edge unreachable for %r: %s", text[:60], e)
+                self.offline_until = time.monotonic() + EDGE_OFFLINE_S
+                return None
+            except Exception as e:  # a problem with this text only
+                log.warning("Edge failed for %r: %s", text[:60], e)
+                return None
+            if attempt < len(delays):
+                time.sleep(delays[attempt])
+                if gen is not None and gen != self.generation:
+                    return None  # the learner moved on
+        return None
 
     def _notice(self, message: str) -> None:
         now = time.monotonic()
@@ -320,7 +357,9 @@ class Speaker:
             self._set_speaking(False)
             return
         data = pcm.tobytes()
-        self.assembled[key] = data
+        # A reading with Windows-voice stand-ins isn't kept: P should try Edge again.
+        if not any(p and p.endswith(".wav") for p in files.values()):
+            self.assembled[key] = data
         while len(self.assembled) > 30:
             self.assembled.popitem(last=False)
         self._play(data, gen)

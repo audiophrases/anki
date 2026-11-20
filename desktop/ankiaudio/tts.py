@@ -53,12 +53,13 @@ class TtsError(Exception):
 
 
 class TtsUnavailable(TtsError):
-    """The service can't be reached or refused us; retrying soon is pointless.
-    ``retry_s`` is how long to leave it alone."""
+    """Edge refused or dropped us. ``transient``: worth asking again in a
+    moment (429 Too Many Requests, a timeout, a dropped connection), as opposed
+    to a hard refusal such as 403 (stale client constants)."""
 
-    def __init__(self, message: str, retry_s: int = 60) -> None:
+    def __init__(self, message: str, transient: bool = True) -> None:
         super().__init__(message)
-        self.retry_s = retry_s
+        self.transient = transient
 
 
 class _ConnectionLost(TtsError):
@@ -187,6 +188,9 @@ class _Session:
             except _ConnectionLost as e:
                 self.close()
                 if attempt == attempts - 1:
+                    cause = e.__cause__
+                    if isinstance(cause, TtsUnavailable):
+                        raise cause
                     raise TtsUnavailable(str(e)) from e
             except BaseException:
                 self.close()
@@ -296,7 +300,7 @@ class _WebSocket:
         status = head.split(b"\r\n", 1)[0].decode("latin-1")
         if " 101 " not in status + " ":
             # 429: a short burst limit. 403: the client constants are stale.
-            raise TtsUnavailable(f"handshake refused: {status}", retry_s=15 if " 429 " in status + " " else 60)
+            raise TtsUnavailable(f"handshake refused: {status}", transient=" 429 " in status + " ")
 
     def _fill(self) -> None:
         remaining = self.deadline - time.monotonic()

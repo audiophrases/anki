@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import traceback
+from logging.handlers import RotatingFileHandler
 from typing import Callable, Dict, List, Optional, Tuple
 
 from aqt import gui_hooks, mw
@@ -283,7 +285,22 @@ class ReadAloud:
 read_aloud = ReadAloud()
 
 
+def setup_log() -> None:
+    """Edge refusals and fallbacks go to user_files/ankiaudio.log."""
+    folder = os.path.join(ADDON_DIR, "user_files")
+    os.makedirs(folder, exist_ok=True)
+    handler = RotatingFileHandler(
+        os.path.join(folder, "ankiaudio.log"), maxBytes=256_000, backupCount=1, encoding="utf-8"
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger = logging.getLogger("ankiaudio")
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
 def setup() -> None:
+    setup_log()
     mw.addonManager.setWebExports(ADDON_PACKAGE, r"web/.*\.(js|css)")
     read_aloud.build_menu()
 
